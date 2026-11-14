@@ -109,9 +109,12 @@ object AnnotationIO {
         }
     }
 
-    fun render(base: Bitmap, strokes: List<Stroke>): Bitmap {
-        val out = base.copy(Bitmap.Config.ARGB_8888, true)
+    fun render(base: Bitmap, strokes: List<Stroke>, note: String = ""): Bitmap {
+        val band = NoteBand.create(note, base.width, base.height)
+        val out = Bitmap.createBitmap(base.width, base.height + (band?.height ?: 0), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
+        canvas.drawBitmap(base, 0f, 0f, null)
+        band?.draw(canvas, base.height.toFloat(), base.width.toFloat())
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
@@ -142,7 +145,7 @@ object AnnotationIO {
     fun save(c: Context, src: Uri, base: Bitmap, strokes: List<Stroke>, note: String): Uri {
         val cr = c.contentResolver
         val tmp = File(c.cacheDir, "annotata.jpg")
-        val rendered = render(base, strokes)
+        val rendered = render(base, strokes, note)
         FileOutputStream(tmp).use { rendered.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         rendered.recycle()
         writeExif(c, src, tmp, note)

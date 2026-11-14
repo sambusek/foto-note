@@ -5,6 +5,7 @@ import android.view.MotionEvent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -20,6 +21,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -142,12 +145,16 @@ fun InkCanvas(
     image: ImageBitmap,
     state: InkState,
     stylusOnly: Boolean,
+    note: String = "",
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current.density
     val imgW = image.width.toFloat()
-    val imgH = image.height.toFloat()
-    val maxSide = maxOf(imgW, imgH)
+    val photoH = image.height.toFloat()
+    val maxSide = maxOf(imgW, photoH)
+    // anteprima della banda con la nota, come verrà salvata
+    val band = remember(note, image) { NoteBand.create(note, image.width, image.height) }
+    val imgH = photoH + (band?.height ?: 0)
 
     var fitK by remember { mutableFloatStateOf(1f) }
     var k by remember { mutableFloatStateOf(1f) }
@@ -266,6 +273,8 @@ fun InkCanvas(
         return true
     }
 
+    LaunchedEffect(imgH) { resetView() }
+
     Canvas(
         modifier
             .fillMaxSize()
@@ -280,6 +289,7 @@ fun InkCanvas(
             scale(k, k, pivot = Offset.Zero)
         }) {
             drawImage(image)
+            band?.let { b -> drawIntoCanvas { b.draw(it.nativeCanvas, photoH, imgW) } }
             for (s in state.strokes) drawStrokeC(Color(s.color), s.width, s.points)
             if (state.current.isNotEmpty()) {
                 drawStrokeC(Color(state.color), state.widthFactor * maxSide, state.current)

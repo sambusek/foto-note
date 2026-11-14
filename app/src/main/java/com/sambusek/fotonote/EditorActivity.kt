@@ -215,7 +215,7 @@ private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
                 bmp == null -> CircularProgressIndicator()
                 else -> {
                     val image = remember(bmp) { bmp.asImageBitmap() }
-                    InkCanvas(image = image, state = ink, stylusOnly = stylusOnly)
+                    InkCanvas(image = image, state = ink, stylusOnly = stylusOnly, note = note)
                 }
             }
             if (saving) CircularProgressIndicator()

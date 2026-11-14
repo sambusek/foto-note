@@ -223,9 +223,14 @@ private fun MainScreen(tick: MutableIntState) {
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Annota l'ultima foto scattata") }
 
+        OutlinedButton(
+            onClick = { ctx.startActivity(BatchActivity.intent(ctx)) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Aggiungi una nota a più foto") }
+
         Text(
-            "Suggerimento: dalla Galleria puoi anche usare Condividi › Annota con Foto Note " +
-                "su qualsiasi foto.",
+            "Dalla Galleria: Condividi › \"Annota con Foto Note\" su una foto, " +
+                "oppure seleziona più foto e Condividi › \"Nota su più foto\".",
             style = MaterialTheme.typography.bodySmall,
         )
     }

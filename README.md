@@ -17,9 +17,15 @@ disegno con S Pen e nota testuale associata alla foto.
 4. **Salva** crea una copia in `Immagini/FotoNote` (`<nome originale>_nota.jpg`).
    L'originale non viene mai toccato. **Condividi** salva e apre la condivisione (foto + nota come testo).
 
+La nota compare **in bianco su una banda nera aggiunta sotto la foto** (la foto non viene coperta;
+l'immagine salvata è più alta dell'originale). Nell'editor vedi l'anteprima mentre scrivi.
 La nota viene scritta anche nei metadati EXIF della copia (descrizione e commento; senza accenti,
 perché l'EXIF accetta solo ASCII). Data, modello e posizione GPS dell'originale vengono copiati.
 Riaprendo la stessa foto ritrovi tratti e nota modificabili.
+
+**Nota su più foto**: dalla schermata principale ("Aggiungi una nota a più foto") oppure dalla
+Galleria selezionando più foto › *Condividi › Nota su più foto*. La stessa nota viene aggiunta a
+tutte; i disegni già fatti restano, una nota precedente viene sostituita.
 
 Puoi annotare anche foto vecchie: dalla Galleria, *Condividi › Annota con Foto Note*.
 
