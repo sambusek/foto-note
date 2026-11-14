@@ -1,0 +1,49 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Compila APK
+        run: gradle assembleDebug -PversionCode=${{ github.run_number }} --stacktrace
+
+      - name: Rinomina APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk foto-note.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foto-note-apk
+          path: foto-note.apk
+
+      - name: Pubblica come release "latest"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest foto-note.apk \
+            --title "Foto Note — build ${{ github.run_number }}" \
+            --notes "Scarica foto-note.apk dal telefono e installalo. Commit: ${{ github.sha }}" \
+            --latest
