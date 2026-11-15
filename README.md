@@ -48,3 +48,7 @@ Gli aggiornamenti si installano sopra la versione precedente (la chiave di firma
 - `EditorActivity` + `Ink.kt` — editor con S Pen, zoom, gomma, annulla
 - `AnnotationIO.kt` — salvataggio della copia annotata, EXIF, archivio delle annotazioni
 - `MainActivity` — impostazioni e permessi
+
+## Crediti
+
+Font pixel: Pixelify Sans, © The Pixelify Sans Project Authors, licenza SIL Open Font License 1.1 (vedi `FONT_LICENSE_OFL.txt`).

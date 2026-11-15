@@ -15,6 +15,10 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -165,75 +169,58 @@ private fun BatchScreen(initial: List<Uri>, onClose: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(P.Bg)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .desktop()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
     ) {
-        GridRow(Modifier.gridFrame()) {
-            Cell(weight = 1f, height = 56.dp, enabled = !running, onClick = onClose) {
-                CellButtonText("Annulla", enabled = !running)
-            }
-            Cell(weight = 2f, height = 56.dp) {
-                Text("NOTA MULTIPLA", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = P.Ink)
-            }
-        }
-
-        GridRow {
-            Cell("Selezione", height = 96.dp, enabled = !running, onClick = { addMore() }) {
-                CellValue("${uris.size}", enabled = !running)
-            }
-            Cell(weight = 2f, height = 96.dp) {
-                LazyRow(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(uris, key = { it.toString() }) { u -> Thumb(u, Modifier.size(78.dp)) }
+        MenuBar("Pastashoot")
+        RetroWindow(
+            title = "Nota multipla",
+            onClose = { if (!running) onClose() },
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
+        ) {
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                GroupBox("Foto selezionate: ${uris.size}") {
+                    LazyRow(
+                        Modifier.fillMaxWidth().height(86.dp).well(P.White),
+                        contentPadding = PaddingValues(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(uris, key = { it.toString() }) { u -> Thumb(u, Modifier.size(74.dp)) }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    PushButton("Modifica selezione…", { addMore() }, enabled = !running)
+                }
+                GroupBox("Nota", Modifier.weight(1f)) {
+                    RetroTextField(
+                        note, { note = it }, "es. Piano 3 – controsoffitto open space",
+                        minHeight = 110.dp, maxHeight = 260.dp, enabled = !running,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                if (running) {
+                    Text("Elaborazione di $done su ${uris.size}…", fontFamily = Pixel, fontSize = 14.sp, color = P.Ink)
+                    Spacer(Modifier.height(6.dp))
+                    RetroProgress(if (uris.isEmpty()) 0f else done.toFloat() / uris.size)
+                } else {
+                    PixelCaption("Banda nera con la nota sotto ogni foto. Una nota precedente viene sostituita, i disegni restano. Originali intatti.")
                 }
             }
-        }
-
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .cellLines()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-        ) {
-            Text("NOTA", style = LabelStyle, color = P.Accent)
-            BasicTextField(
-                value = note,
-                onValueChange = { note = it },
-                enabled = !running,
-                textStyle = TextStyle(fontSize = 18.sp, color = P.Ink, lineHeight = 25.sp),
-                cursorBrush = SolidColor(P.Accent),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp).padding(top = 8.dp),
-                decorationBox = { inner ->
-                    if (note.isEmpty()) {
-                        Text("es. Piano 3 – controsoffitto open space", fontSize = 18.sp, color = P.Off)
-                    }
-                    inner()
-                },
-            )
-        }
-
-        if (running) {
-            ThinProgress(if (uris.isEmpty()) 0f else done.toFloat() / uris.size)
-        }
-        Caption("Banda nera con la nota sotto ogni foto. Una nota precedente viene sostituita, i disegni restano. Originali intatti.")
-
-        val can = !running && note.isNotBlank() && uris.isNotEmpty()
-        GridRow {
-            Cell(height = 72.dp, accent = true, enabled = can, onClick = { apply() }) {
-                CellButtonText(
-                    if (running) "${done} / ${uris.size}" else "Applica a ${uris.size} foto",
-                    enabled = can, accent = true,
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PushButton("Annulla", onClose, enabled = !running)
+                PushButton(
+                    "Applica a ${uris.size}", { apply() }, default = true,
+                    enabled = !running && note.isNotBlank() && uris.isNotEmpty(),
                 )
             }
         }
     }
 }
 
-/** Griglia delle foto del telefono (più recenti prima) con selezione multipla. */
+/** Finestra con le foto del telefono (più recenti prima) e selezione multipla. */
 @Composable
 private fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCancel: () -> Unit) {
     val ctx = LocalContext.current
@@ -247,50 +234,67 @@ private fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCan
     Column(
         Modifier
             .fillMaxSize()
-            .background(P.Bg)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .desktop()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
     ) {
-        GridRow(Modifier.gridFrame()) {
-            Cell(height = 60.dp, onClick = onCancel) { CellButtonText("Annulla") }
-            Cell("Mostra", height = 60.dp, on = onlyCamera, onClick = { onlyCamera = !onlyCamera }) {
-                CellButtonText(if (onlyCamera) "Fotocamera" else "Tutte")
-            }
-            Cell(height = 60.dp, accent = true, enabled = selected.isNotEmpty(), onClick = { onDone(selected.toList()) }) {
-                CellButtonText("Fatto ${selected.size}", enabled = selected.isNotEmpty(), accent = true)
-            }
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(96.dp),
-            modifier = Modifier.fillMaxSize().background(P.Line),
-            horizontalArrangement = Arrangement.spacedBy(1.dp),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+        MenuBar("Pastashoot")
+        RetroWindow(
+            title = if (onlyCamera) "Fotocamera" else "Tutte le immagini",
+            onClose = onCancel,
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
         ) {
-            gridItems(photos, key = { it.toString() }) { u ->
-                val idx = selected.indexOf(u)
-                Box(
-                    Modifier
-                        .aspectRatio(1f)
-                        .clickable { if (idx >= 0) selected.remove(u) else selected.add(u) }
-                ) {
-                    Thumb(u, Modifier.fillMaxSize())
-                    if (idx >= 0) {
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(P.AccentSoft.copy(alpha = 0.35f))
-                                .border(3.dp, P.Accent)
-                        )
-                        Box(
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .size(28.dp)
-                                .background(P.Accent),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("${idx + 1}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.weight(1f)) {
+                    RetroCheckbox(onlyCamera, "Solo fotocamera", { onlyCamera = !onlyCamera })
+                }
+                PixelCaption("${photos.size} elementi")
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(92.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp).well(P.White),
+                contentPadding = PaddingValues(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                gridItems(photos, key = { it.toString() }) { u ->
+                    val idx = selected.indexOf(u)
+                    Box(
+                        Modifier
+                            .aspectRatio(1f)
+                            .clickable { if (idx >= 0) selected.remove(u) else selected.add(u) }
+                    ) {
+                        Thumb(u, Modifier.fillMaxSize())
+                        if (idx >= 0) {
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(P.Accent.copy(alpha = 0.35f))
+                                    .border(3.dp, P.Accent)
+                            )
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(24.dp)
+                                    .background(P.Accent)
+                                    .border(1.dp, P.Ink),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("${idx + 1}", fontFamily = Pixel, color = Color.White, fontSize = 13.sp)
+                            }
                         }
                     }
                 }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PushButton("Annulla", onCancel)
+                PushButton("Scegli ${selected.size}", { onDone(selected.toList()) }, default = true, enabled = selected.isNotEmpty())
             }
         }
     }

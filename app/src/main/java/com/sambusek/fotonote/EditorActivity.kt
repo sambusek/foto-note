@@ -10,6 +10,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,11 +32,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -153,142 +157,155 @@ private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
     BackHandler(enabled = unsaved) { askExit = true }
 
     if (askExit) {
-        AlertDialog(
-            onDismissRequest = { askExit = false },
-            title = { Text("Modifiche non salvate") },
-            text = { Text("Vuoi salvare l'annotazione prima di uscire?") },
-            confirmButton = {
-                TextButton(onClick = { askExit = false; save(false) }) { Text("Salva") }
-            },
-            dismissButton = {
-                TextButton(onClick = { askExit = false; onClose() }) { Text("Esci senza salvare") }
-            },
+        RetroAlert(
+            message = "Salvare le modifiche prima di chiudere?",
+            detail = "Se non salvi, i tratti e la nota andranno persi.",
+            confirm = "Salva",
+            onConfirm = { askExit = false; save(false) },
+            dismiss = "Non salvare",
+            onDismiss = { askExit = false; onClose() },
         )
     }
 
     var colorMenu by remember { mutableStateOf(false) }
     val ready = bitmap != null && !saving
+    val fileName by produceState("Senza titolo", uri) {
+        value = withContext(Dispatchers.IO) { MediaHelper.displayName(ctx.contentResolver, uri) } ?: "Senza titolo"
+    }
 
     Column(
         Modifier
             .fillMaxSize()
-            .background(P.Bg)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .desktop()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
     ) {
-        // --- barra superiore ---
-        GridRow(Modifier.gridFrame()) {
-            Cell(weight = 1.1f, height = 56.dp, onClick = { if (unsaved) askExit = true else onClose() }) {
-                CellButtonText("Chiudi")
-            }
-            Cell(weight = 0.7f, height = 56.dp, enabled = ink.canUndo, onClick = { ink.undo() }) {
-                CellValue("↶", enabled = ink.canUndo, size = 24)
-            }
-            Cell(weight = 0.7f, height = 56.dp, enabled = ink.canRedo, onClick = { ink.redo() }) {
-                CellValue("↷", enabled = ink.canRedo, size = 24)
-            }
-            Cell(weight = 1.3f, height = 56.dp, enabled = ready, onClick = { save(true) }) {
-                CellButtonText("Condividi", enabled = ready)
-            }
-            Cell(weight = 1.2f, height = 56.dp, accent = true, enabled = ready, onClick = { save(false) }) {
-                CellButtonText("Salva", enabled = ready, accent = true)
-            }
-        }
+        MenuBar("Pastashoot")
 
-        // --- foto e disegno ---
-        Box(
-            Modifier.weight(1f).fillMaxWidth().background(P.Canvas),
-            contentAlignment = Alignment.Center,
+        RetroWindow(
+            title = fileName,
+            onClose = { if (unsaved) askExit = true else onClose() },
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 4.dp, end = 7.dp, top = 6.dp),
         ) {
-            val bmp = bitmap
-            when {
-                error != null -> Text(error!!, color = P.Ink, modifier = Modifier.padding(24.dp))
-                bmp == null -> CircularProgressIndicator(color = P.Accent)
-                else -> {
-                    val image = remember(bmp) { bmp.asImageBitmap() }
-                    InkCanvas(image = image, state = ink, stylusOnly = stylusOnly, note = note)
-                }
-            }
-            if (saving) CircularProgressIndicator(color = P.Accent)
-        }
-
-        // --- nota testuale ---
-        if (noteOpen) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .gridFrame()
-                    .cellLines()
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            // barra dei comandi
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text("NOTA", style = LabelStyle, color = P.Accent)
-                BasicTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    textStyle = TextStyle(fontSize = 17.sp, color = P.Ink, lineHeight = 23.sp),
-                    cursorBrush = SolidColor(P.Accent),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp, max = 150.dp)
-                        .padding(top = 6.dp),
-                    decorationBox = { inner ->
-                        if (note.isEmpty()) {
-                            Text("Scrivi o detta una nota…", fontSize = 17.sp, color = P.Off)
-                        }
-                        inner()
-                    },
-                )
+                BevelBox(null, Modifier.size(44.dp), enabled = ink.canUndo, onClick = { ink.undo() }) {
+                    BevelValue("↶", enabled = ink.canUndo, size = 20)
+                }
+                BevelBox(null, Modifier.size(44.dp), enabled = ink.canRedo, onClick = { ink.redo() }) {
+                    BevelValue("↷", enabled = ink.canRedo, size = 20)
+                }
+                Spacer(Modifier.weight(1f))
+                PushButton("Condividi", { save(true) }, enabled = ready)
+                PushButton("Salva", { save(false) }, default = true, enabled = ready)
             }
-        }
 
-        // --- strumenti ---
-        GridRow(Modifier.gridFrame()) {
-            Cell("Colore", onClick = { colorMenu = true }) {
-                Swatch(ink.color, size = 34)
-                DropdownMenu(expanded = colorMenu, onDismissRequest = { colorMenu = false }) {
-                    Row(
-                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        for (c in PALETTE) {
-                            Box(Modifier.clickable { ink.color = c; ink.eraser = false; colorMenu = false }) {
-                                Swatch(c, size = 38, selected = c == ink.color)
-                            }
+            // foto e disegno
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp)
+                    .well(P.Canvas),
+                contentAlignment = Alignment.Center,
+            ) {
+                val bmp = bitmap
+                when {
+                    error != null -> CenterNote(error!!)
+                    bmp == null -> CenterNote("Apertura in corso…")
+                    else -> {
+                        val image = remember(bmp) { bmp.asImageBitmap() }
+                        InkCanvas(image = image, state = ink, stylusOnly = stylusOnly, note = note)
+                    }
+                }
+                if (saving) {
+                    Box(Modifier.width(220.dp).background(P.Bg).border(1.dp, P.Ink).padding(12.dp)) {
+                        Column {
+                            Text("Salvataggio…", fontFamily = Pixel, fontSize = 14.sp, color = P.Ink)
+                            Spacer(Modifier.height(8.dp))
+                            RetroProgress(0.6f)
                         }
                     }
                 }
             }
-            val wIdx = WIDTHS.indexOfFirst { it.second == ink.widthFactor }.coerceAtLeast(0)
-            Cell("Tratto", onClick = { ink.widthFactor = WIDTHS[(wIdx + 1) % WIDTHS.size].second }) {
-                CellValue(WIDTHS[wIdx].first)
+
+            // nota testuale
+            if (noteOpen) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 8.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Text("Nota:", fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                        color = P.Ink, modifier = Modifier.padding(top = 10.dp, end = 8.dp))
+                    RetroTextField(note, { note = it }, "Scrivi o detta una nota…", maxHeight = 130.dp)
+                }
             }
-            Cell("Gomma", on = ink.eraser, onClick = { ink.eraser = !ink.eraser }) {
-                CellValue(if (ink.eraser) "ON" else "OFF")
-            }
+            Spacer(Modifier.height(6.dp))
         }
-        GridRow {
-            Cell("Input", on = stylusOnly, onClick = {
-                stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly)
-            }) {
-                CellValue(if (stylusOnly) "PENNA" else "+ DITO", size = 22)
-            }
-            Cell("Nota", on = noteOpen, onClick = { noteOpen = !noteOpen }) {
-                CellValue(if (noteOpen) "ON" else "OFF")
-            }
-            Cell("Cancella", enabled = ink.strokes.isNotEmpty(), onClick = { ink.clearAll() }) {
-                CellValue("TUTTO", enabled = ink.strokes.isNotEmpty(), size = 22)
+
+        // palette degli strumenti
+        RetroWindow(
+            title = "Strumenti",
+            small = true,
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 7.dp, top = 8.dp, bottom = 9.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                BevelButton("Colore", onClick = { colorMenu = true }) {
+                    Swatch(ink.color, size = 26)
+                    DropdownMenu(
+                        expanded = colorMenu,
+                        onDismissRequest = { colorMenu = false },
+                        modifier = Modifier.background(P.Bg).border(1.dp, P.Ink),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            for (c in PALETTE) {
+                                Box(Modifier.clickable { ink.color = c; ink.eraser = false; colorMenu = false }) {
+                                    Swatch(c, size = 34, selected = c == ink.color)
+                                }
+                            }
+                        }
+                    }
+                }
+                val wIdx = WIDTHS.indexOfFirst { it.second == ink.widthFactor }.coerceAtLeast(0)
+                BevelButton("Tratto", onClick = { ink.widthFactor = WIDTHS[(wIdx + 1) % WIDTHS.size].second }) {
+                    BevelValue(WIDTHS[wIdx].first)
+                }
+                BevelButton("Gomma", on = ink.eraser, onClick = { ink.eraser = !ink.eraser }) {
+                    BevelValue(if (ink.eraser) "SÌ" else "NO")
+                }
+                BevelButton("Input", on = stylusOnly, onClick = {
+                    stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly)
+                }) {
+                    BevelValue(if (stylusOnly) "PEN" else "+DITO", size = 15)
+                }
+                BevelButton("Nota", on = noteOpen, onClick = { noteOpen = !noteOpen }) {
+                    BevelValue("T", size = 20)
+                }
+                BevelButton("Pulisci", enabled = ink.strokes.isNotEmpty(), onClick = { ink.clearAll() }) {
+                    BevelValue("✕", enabled = ink.strokes.isNotEmpty(), size = 18)
+                }
             }
         }
     }
 }
 
-/** Campione di colore quadrato, bordato come un'icona Platinum. */
+/** Campione di colore quadrato. */
 @Composable
 private fun Swatch(color: Int, size: Int, selected: Boolean = false) {
     Box(
         Modifier
             .size(size.dp)
             .border(if (selected) 3.dp else 1.dp, if (selected) P.Accent else P.Ink)
-            .padding(if (selected) 4.dp else 0.dp)
+            .padding(if (selected) 4.dp else 1.dp)
             .background(Color(color))
     )
 }
