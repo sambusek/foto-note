@@ -9,68 +9,55 @@ import android.util.Size
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.IntentCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -89,7 +76,7 @@ class BatchActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        platinumEdgeToEdge()
         val shared: List<Uri> = when (intent.action) {
             Intent.ACTION_SEND_MULTIPLE ->
                 IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
@@ -98,12 +85,7 @@ class BatchActivity : ComponentActivity() {
                 listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
             else -> emptyList()
         }
-        setContent {
-            val scheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
-            MaterialTheme(colorScheme = scheme) {
-                Surface(Modifier.fillMaxSize()) { BatchScreen(shared, onClose = { finish() }) }
-            }
-        }
+        setContent { PlatinumTheme { BatchScreen(shared, onClose = { finish() }) } }
     }
 }
 
@@ -183,52 +165,71 @@ private fun BatchScreen(initial: List<Uri>, onClose: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
+            .background(P.Bg)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Nota su più foto", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(
-            "La nota viene scritta in bianco su una banda nera aggiunta sotto ogni foto. " +
-                "Gli originali restano intatti; le copie vanno in Immagini › FotoNote.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-
-        Text("${uris.size} foto selezionate", fontWeight = FontWeight.Bold)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(uris, key = { it.toString() }) { u -> Thumb(u) }
+        GridRow(Modifier.gridFrame()) {
+            Cell(weight = 1f, height = 56.dp, enabled = !running, onClick = onClose) {
+                CellButtonText("Annulla", enabled = !running)
+            }
+            Cell(weight = 2f, height = 56.dp) {
+                Text("NOTA MULTIPLA", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = P.Ink)
+            }
         }
-        OutlinedButton(onClick = { addMore() }, enabled = !running) { Text("Modifica selezione") }
 
-        OutlinedTextField(
-            value = note,
-            onValueChange = { note = it },
-            label = { Text("Nota") },
-            placeholder = { Text("es. Piano 3 – controsoffitto zona open space") },
-            minLines = 3,
-            enabled = !running,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        GridRow {
+            Cell("Selezione", height = 96.dp, enabled = !running, onClick = { addMore() }) {
+                CellValue("${uris.size}", enabled = !running)
+            }
+            Cell(weight = 2f, height = 96.dp) {
+                LazyRow(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    items(uris, key = { it.toString() }) { u -> Thumb(u, Modifier.size(78.dp)) }
+                }
+            }
+        }
+
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .cellLines()
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+        ) {
+            Text("NOTA", style = LabelStyle, color = P.Accent)
+            BasicTextField(
+                value = note,
+                onValueChange = { note = it },
+                enabled = !running,
+                textStyle = TextStyle(fontSize = 18.sp, color = P.Ink, lineHeight = 25.sp),
+                cursorBrush = SolidColor(P.Accent),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp).padding(top = 8.dp),
+                decorationBox = { inner ->
+                    if (note.isEmpty()) {
+                        Text("es. Piano 3 – controsoffitto open space", fontSize = 18.sp, color = P.Off)
+                    }
+                    inner()
+                },
+            )
+        }
 
         if (running) {
-            LinearProgressIndicator(
-                progress = { if (uris.isEmpty()) 0f else done.toFloat() / uris.size },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text("$done / ${uris.size}")
+            ThinProgress(if (uris.isEmpty()) 0f else done.toFloat() / uris.size)
         }
+        Caption("Banda nera con la nota sotto ogni foto. Una nota precedente viene sostituita, i disegni restano. Originali intatti.")
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onClose, enabled = !running) { Text("Annulla") }
-            Button(
-                onClick = { apply() },
-                enabled = !running && note.isNotBlank() && uris.isNotEmpty(),
-            ) { Text("Aggiungi a ${uris.size} foto") }
+        val can = !running && note.isNotBlank() && uris.isNotEmpty()
+        GridRow {
+            Cell(height = 72.dp, accent = true, enabled = can, onClick = { apply() }) {
+                CellButtonText(
+                    if (running) "${done} / ${uris.size}" else "Applica a ${uris.size} foto",
+                    enabled = can, accent = true,
+                )
+            }
         }
-        Text(
-            "Se una foto aveva già una nota, viene sostituita; i disegni restano.",
-            style = MaterialTheme.typography.bodySmall,
-        )
     }
 }
 
@@ -243,28 +244,26 @@ private fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCan
     }
     BackHandler { onCancel() }
 
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-        Row(
-            Modifier.fillMaxWidth().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TextButton(onClick = onCancel) { Text("Annulla") }
-            FilterChip(
-                selected = onlyCamera,
-                onClick = { onlyCamera = !onlyCamera },
-                label = { Text("Solo fotocamera") },
-            )
-            Spacer(Modifier.weight(1f))
-            Button(onClick = { onDone(selected.toList()) }, enabled = selected.isNotEmpty()) {
-                Text("Fatto (${selected.size})", maxLines = 1)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(P.Bg)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+    ) {
+        GridRow(Modifier.gridFrame()) {
+            Cell(height = 60.dp, onClick = onCancel) { CellButtonText("Annulla") }
+            Cell("Mostra", height = 60.dp, on = onlyCamera, onClick = { onlyCamera = !onlyCamera }) {
+                CellButtonText(if (onlyCamera) "Fotocamera" else "Tutte")
+            }
+            Cell(height = 60.dp, accent = true, enabled = selected.isNotEmpty(), onClick = { onDone(selected.toList()) }) {
+                CellButtonText("Fatto ${selected.size}", enabled = selected.isNotEmpty(), accent = true)
             }
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(96.dp),
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.fillMaxSize().background(P.Line),
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             gridItems(photos, key = { it.toString() }) { u ->
                 val idx = selected.indexOf(u)
@@ -278,19 +277,17 @@ private fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCan
                         Box(
                             Modifier
                                 .fillMaxSize()
-                                .border(4.dp, MaterialTheme.colorScheme.primary)
-                                .background(Color.Black.copy(alpha = 0.25f))
+                                .background(P.AccentSoft.copy(alpha = 0.35f))
+                                .border(3.dp, P.Accent)
                         )
                         Box(
                             Modifier
-                                .padding(6.dp)
-                                .size(26.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                                .align(Alignment.TopEnd),
+                                .align(Alignment.TopEnd)
+                                .size(28.dp)
+                                .background(P.Accent),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text("${idx + 1}", color = MaterialTheme.colorScheme.onPrimary, fontSize = 13.sp)
+                            Text("${idx + 1}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -300,18 +297,14 @@ private fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCan
 }
 
 @Composable
-private fun Thumb(uri: Uri, modifier: Modifier = Modifier.size(84.dp)) {
+private fun Thumb(uri: Uri, modifier: Modifier) {
     val ctx = LocalContext.current
     val bmp by produceState<Bitmap?>(null, uri) {
         value = withContext(Dispatchers.IO) {
             runCatching { ctx.contentResolver.loadThumbnail(uri, Size(240, 240), null) }.getOrNull()
         }
     }
-    Box(
-        modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.DarkGray)
-    ) {
+    Box(modifier.background(P.Canvas)) {
         bmp?.let {
             Image(
                 bitmap = it.asImageBitmap(),

@@ -13,29 +13,20 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.getValue
@@ -45,9 +36,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
@@ -55,15 +49,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        platinumEdgeToEdge()
         Notifications.createChannels(this)
         if (Prefs.isMonitoring(this) && MediaHelper.hasPhotoPermission(this)) ServiceControl.start(this)
-        setContent {
-            val scheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
-            MaterialTheme(colorScheme = scheme) {
-                Surface(Modifier.fillMaxSize()) { MainScreen(tick) }
-            }
-        }
+        setContent { PlatinumTheme { MainScreen(tick) } }
     }
 
     override fun onResume() {
@@ -88,6 +77,7 @@ private fun MainScreen(tick: MutableIntState) {
     val hasNotif = remember(t) {
         Build.VERSION.SDK_INT < 33 || granted(ctx, Manifest.permission.POST_NOTIFICATIONS)
     }
+    val hasGps = remember(t) { granted(ctx, Manifest.permission.ACCESS_MEDIA_LOCATION) }
     val hasOverlay = remember(t) { Settings.canDrawOverlays(ctx) }
     val noBatteryLimit = remember(t) {
         ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)
@@ -110,138 +100,131 @@ private fun MainScreen(tick: MutableIntState) {
         )
     }
 
+    fun toggleMonitoring() {
+        val on = !monitoring
+        if (on && !hasPhotos) {
+            Toast.makeText(ctx, "Prima concedi l'accesso alle foto", Toast.LENGTH_SHORT).show()
+            requestPerms(); return
+        }
+        monitoring = on
+        Prefs.setMonitoring(ctx, on)
+        if (on) ServiceControl.start(ctx) else ServiceControl.stop(ctx)
+    }
+
+    fun toggleAutoOpen() {
+        autoOpen = !autoOpen
+        Prefs.setAutoOpen(ctx, autoOpen)
+        if (autoOpen && !Settings.canDrawOverlays(ctx)) {
+            Toast.makeText(ctx, "Attiva \"Comparsa sopra altre app\" per Foto Note", Toast.LENGTH_LONG).show()
+            ctx.startActivity(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
+            )
+        }
+    }
+
+    fun battery() {
+        try {
+            ctx.startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:${ctx.packageName}")
+                )
+            )
+        } catch (e: Exception) {
+            openAppSettings()
+        }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
+            .background(P.Bg)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Foto Note", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text(
-            "Scatta con la Fotocamera Samsung come sempre: subito dopo ti arriva una notifica " +
-                "per annotare la foto con l'S Pen e aggiungere una nota. L'originale non viene " +
-                "modificato; la copia annotata va in Immagini › FotoNote.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-
-        // 1. permessi
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("1. Permessi", fontWeight = FontWeight.Bold)
-                Text(status(hasPhotos, "Accesso alle foto"))
-                Text(status(hasNotif, "Notifiche"))
-                if (!hasPhotos || !hasNotif) {
+        // intestazione
+        GridRow(Modifier.gridFrame()) {
+            Cell(height = 112.dp) {
+                Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp)) {
                     Text(
-                        "Quando Android chiede l'accesso alle foto scegli \"Consenti tutto\", " +
-                            "non \"Seleziona foto\".",
-                        style = MaterialTheme.typography.bodySmall,
+                        "FOTO NOTE", fontSize = 34.sp, fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp, color = P.Ink,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { requestPerms() }) { Text("Concedi") }
-                        OutlinedButton(onClick = { openAppSettings() }) { Text("Impostazioni app") }
-                    }
+                    Text("Scatta. Annota. Fatto.", fontSize = 15.sp, color = P.Ink2)
                 }
             }
-        }
-
-        // 2. monitoraggio
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("2. Monitoraggio", fontWeight = FontWeight.Bold)
-                SwitchRow("Proponi l'annotazione dopo ogni scatto", monitoring) { on ->
-                    if (on && !hasPhotos) {
-                        Toast.makeText(ctx, "Prima concedi l'accesso alle foto", Toast.LENGTH_SHORT).show()
-                        requestPerms()
-                        return@SwitchRow
-                    }
-                    monitoring = on
-                    Prefs.setMonitoring(ctx, on)
-                    if (on) ServiceControl.start(ctx) else ServiceControl.stop(ctx)
-                }
-                SwitchRow("Apri l'editor da solo (senza toccare la notifica)", autoOpen) { on ->
-                    autoOpen = on
-                    Prefs.setAutoOpen(ctx, on)
-                    if (on && !Settings.canDrawOverlays(ctx)) {
-                        Toast.makeText(
-                            ctx, "Attiva \"Comparsa sopra altre app\" per Foto Note", Toast.LENGTH_LONG
-                        ).show()
-                        ctx.startActivity(
-                            Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:${ctx.packageName}")
-                            )
-                        )
-                    }
-                }
-                if (autoOpen && !hasOverlay) {
-                    Text(
-                        "Manca il permesso \"Comparsa sopra altre app\": per ora riceverai solo la notifica.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        }
-
-        // 3. batteria
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("3. Risparmio batteria", fontWeight = FontWeight.Bold)
-                Text(status(noBatteryLimit, "Escluso dall'ottimizzazione batteria"))
-                Text(
-                    "Samsung tende a chiudere le app in background. Escludi Foto Note e, in " +
-                        "Impostazioni › Batteria › Limiti utilizzo in background, aggiungila " +
-                        "alle \"App mai in sospensione\".",
-                    style = MaterialTheme.typography.bodySmall,
+            Cell("Stato", weight = 0.55f, height = 112.dp, on = monitoring, onClick = { toggleMonitoring() }) {
+                Box(
+                    Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(if (monitoring) P.Accent else P.Off)
                 )
-                if (!noBatteryLimit) {
-                    Button(onClick = {
-                        try {
-                            ctx.startActivity(
-                                Intent(
-                                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                    Uri.parse("package:${ctx.packageName}")
-                                )
-                            )
-                        } catch (e: Exception) {
-                            openAppSettings()
-                        }
-                    }) { Text("Escludi dal risparmio batteria") }
-                }
             }
         }
 
-        // prova manuale
-        OutlinedButton(
-            onClick = {
+        // azioni principali
+        GridRow {
+            Cell("Ultima foto", height = 150.dp, accent = true, onClick = {
                 val p = if (hasPhotos) MediaHelper.latestCameraPhoto(ctx.contentResolver) else null
                 if (p == null) {
                     Toast.makeText(ctx, "Nessuna foto trovata in DCIM/Camera", Toast.LENGTH_SHORT).show()
                 } else ctx.startActivity(EditorActivity.intent(ctx, p.uri))
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Annota l'ultima foto scattata") }
+            }) {
+                PlusDisc(filled = false)
+            }
+            Cell("Nota multipla", height = 150.dp, onClick = { ctx.startActivity(BatchActivity.intent(ctx)) }) {
+                PlusDisc(filled = true)
+            }
+        }
 
-        OutlinedButton(
-            onClick = { ctx.startActivity(BatchActivity.intent(ctx)) },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Aggiungi una nota a più foto") }
+        // impostazioni
+        GridRow {
+            Cell("Dopo lo scatto", on = monitoring, onClick = { toggleMonitoring() }) {
+                CellValue(if (monitoring) "ON" else "OFF")
+            }
+            Cell("Apri da solo", on = autoOpen, onClick = { toggleAutoOpen() }) {
+                CellValue(if (!autoOpen) "OFF" else if (hasOverlay) "ON" else "ON*")
+            }
+        }
+        GridRow {
+            Cell("Foto", on = hasPhotos, onClick = { if (hasPhotos) openAppSettings() else requestPerms() }) {
+                CellValue(if (hasPhotos) "OK" else "NO", size = 24)
+            }
+            Cell("GPS", on = hasGps, onClick = { if (hasGps) openAppSettings() else requestPerms() }) {
+                CellValue(if (hasGps) "OK" else "NO", size = 24)
+            }
+            Cell("Avvisi", on = hasNotif, onClick = { if (hasNotif) openAppSettings() else requestPerms() }) {
+                CellValue(if (hasNotif) "OK" else "NO", size = 24)
+            }
+            Cell("Batteria", on = noBatteryLimit, onClick = { if (noBatteryLimit) openAppSettings() else battery() }) {
+                CellValue(if (noBatteryLimit) "OK" else "NO", size = 24)
+            }
+        }
 
-        Text(
-            "Dalla Galleria: Condividi › \"Annota con Foto Note\" su una foto, " +
-                "oppure seleziona più foto e Condividi › \"Nota su più foto\".",
-            style = MaterialTheme.typography.bodySmall,
+        Caption(
+            "Scatta con la Fotocamera Samsung: dopo ogni foto arriva una notifica per annotarla con " +
+                "l'S Pen. Gli originali restano intatti; le copie vanno in Immagini › FotoNote.\n\n" +
+                "Le celle in lavanda sono attive. Tocca una cella \"NO\" per concedere il permesso; " +
+                "per le foto scegli \"Consenti tutto\".\n\n" +
+                "Batteria: in Impostazioni › Batteria › Limiti di utilizzo in background, aggiungi " +
+                "Foto Note alle \"App mai in sospensione\"." +
+                (if (autoOpen && !hasOverlay) "\n\n* Manca il permesso \"Comparsa sopra altre app\": per ora arriva solo la notifica." else "") +
+                "\n\nDalla Galleria: Condividi › \"Annota con Foto Note\" o, con più foto, \"Nota su più foto\"."
         )
     }
 }
 
-private fun status(ok: Boolean, label: String) = (if (ok) "✅ " else "⚠️ ") + label
-
+/** Il grande disco con il "+", come il pulsante di scatto. */
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f).padding(end = 8.dp))
-        Switch(checked = checked, onCheckedChange = onChange)
+private fun PlusDisc(filled: Boolean) {
+    Box(
+        Modifier
+            .size(84.dp)
+            .clip(CircleShape)
+            .background(if (filled) P.Accent else Color.White),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("+", fontSize = 44.sp, fontWeight = FontWeight.Light, color = if (filled) Color.White else P.Accent)
     }
 }

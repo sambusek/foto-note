@@ -9,17 +9,13 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,20 +23,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,10 +39,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.IntentCompat
@@ -70,7 +60,7 @@ class EditorActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        platinumEdgeToEdge()
         val uri: Uri? = if (intent.action == Intent.ACTION_SEND) {
             IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
         } else intent.data
@@ -78,9 +68,7 @@ class EditorActivity : ComponentActivity() {
             finish(); return
         }
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                EditorScreen(uri, onClose = { finish() })
-            }
+            PlatinumTheme { EditorScreen(uri, onClose = { finish() }) }
         }
     }
 }
@@ -88,6 +76,7 @@ class EditorActivity : ComponentActivity() {
 private val PALETTE = listOf(
     0xFFE53935.toInt(), // rosso
     0xFFFFD600.toInt(), // giallo
+    0xFF6B6BE0.toInt(), // azzurro-viola
     0xFF1E88E5.toInt(), // blu
     0xFF43A047.toInt(), // verde
     0xFF000000.toInt(), // nero
@@ -177,130 +166,129 @@ private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
         )
     }
 
+    var colorMenu by remember { mutableStateOf(false) }
+    val ready = bitmap != null && !saving
+
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(P.Bg)
             .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         // --- barra superiore ---
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val compact = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-            TextButton(onClick = { if (unsaved) askExit = true else onClose() }, contentPadding = compact) {
-                Text("Chiudi", maxLines = 1, softWrap = false)
+        GridRow(Modifier.gridFrame()) {
+            Cell(weight = 1.1f, height = 56.dp, onClick = { if (unsaved) askExit = true else onClose() }) {
+                CellButtonText("Chiudi")
             }
-            TextButton(onClick = { ink.undo() }, enabled = ink.canUndo, contentPadding = compact) {
-                Text("↶", fontSize = 22.sp, maxLines = 1)
+            Cell(weight = 0.7f, height = 56.dp, enabled = ink.canUndo, onClick = { ink.undo() }) {
+                CellValue("↶", enabled = ink.canUndo, size = 24)
             }
-            TextButton(onClick = { ink.redo() }, enabled = ink.canRedo, contentPadding = compact) {
-                Text("↷", fontSize = 22.sp, maxLines = 1)
+            Cell(weight = 0.7f, height = 56.dp, enabled = ink.canRedo, onClick = { ink.redo() }) {
+                CellValue("↷", enabled = ink.canRedo, size = 24)
             }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = { save(true) }, enabled = bitmap != null && !saving, contentPadding = compact) {
-                Text("Condividi", maxLines = 1, softWrap = false)
+            Cell(weight = 1.3f, height = 56.dp, enabled = ready, onClick = { save(true) }) {
+                CellButtonText("Condividi", enabled = ready)
             }
-            Button(onClick = { save(false) }, enabled = bitmap != null && !saving, contentPadding = compact) {
-                Text("Salva", maxLines = 1, softWrap = false)
+            Cell(weight = 1.2f, height = 56.dp, accent = true, enabled = ready, onClick = { save(false) }) {
+                CellButtonText("Salva", enabled = ready, accent = true)
             }
         }
 
         // --- foto e disegno ---
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.weight(1f).fillMaxWidth().background(P.Canvas),
+            contentAlignment = Alignment.Center,
+        ) {
             val bmp = bitmap
             when {
-                error != null -> Text(error!!, color = Color.White, modifier = Modifier.padding(24.dp))
-                bmp == null -> CircularProgressIndicator()
+                error != null -> Text(error!!, color = P.Ink, modifier = Modifier.padding(24.dp))
+                bmp == null -> CircularProgressIndicator(color = P.Accent)
                 else -> {
                     val image = remember(bmp) { bmp.asImageBitmap() }
                     InkCanvas(image = image, state = ink, stylusOnly = stylusOnly, note = note)
                 }
             }
-            if (saving) CircularProgressIndicator()
+            if (saving) CircularProgressIndicator(color = P.Accent)
         }
 
         // --- nota testuale ---
         if (noteOpen) {
-            OutlinedTextField(
-                value = note,
-                onValueChange = { note = it },
-                label = { Text("Nota") },
-                placeholder = { Text("Scrivi o detta una nota da associare alla foto") },
-                minLines = 2,
-                modifier = Modifier
+            Column(
+                Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 180.dp)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
+                    .gridFrame()
+                    .cellLines()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Text("NOTA", style = LabelStyle, color = P.Accent)
+                BasicTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    textStyle = TextStyle(fontSize = 17.sp, color = P.Ink, lineHeight = 23.sp),
+                    cursorBrush = SolidColor(P.Accent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp, max = 150.dp)
+                        .padding(top = 6.dp),
+                    decorationBox = { inner ->
+                        if (note.isEmpty()) {
+                            Text("Scrivi o detta una nota…", fontSize = 17.sp, color = P.Off)
+                        }
+                        inner()
+                    },
+                )
+            }
         }
 
         // --- strumenti ---
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ColorPicker(
-                current = ink.color,
-                active = !ink.eraser,
-                onPick = { ink.color = it; ink.eraser = false },
-            )
-            Spacer(Modifier.width(4.dp))
-            for ((label, f) in WIDTHS) {
-                FilterChip(
-                    selected = ink.widthFactor == f,
-                    onClick = { ink.widthFactor = f },
-                    label = { Text(label) },
-                )
-            }
-            FilterChip(selected = ink.eraser, onClick = { ink.eraser = !ink.eraser }, label = { Text("Gomma") })
-            FilterChip(
-                selected = stylusOnly,
-                onClick = { stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly) },
-                label = { Text("Solo S Pen") },
-            )
-            FilterChip(selected = noteOpen, onClick = { noteOpen = !noteOpen }, label = { Text("Nota") })
-            TextButton(onClick = { ink.clearAll() }, enabled = ink.strokes.isNotEmpty()) { Text("Cancella tutto") }
-        }
-    }
-}
-
-/** Un solo pallino con il colore attuale: toccandolo si apre la scelta dei colori. */
-@Composable
-private fun ColorPicker(current: Int, active: Boolean, onPick: (Int) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        ColorDot(current, selected = active, size = 36) { open = true }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Row(
-                Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                for (c in PALETTE) {
-                    ColorDot(c, selected = c == current, size = 36) { onPick(c); open = false }
+        GridRow(Modifier.gridFrame()) {
+            Cell("Colore", onClick = { colorMenu = true }) {
+                Swatch(ink.color, size = 34)
+                DropdownMenu(expanded = colorMenu, onDismissRequest = { colorMenu = false }) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        for (c in PALETTE) {
+                            Box(Modifier.clickable { ink.color = c; ink.eraser = false; colorMenu = false }) {
+                                Swatch(c, size = 38, selected = c == ink.color)
+                            }
+                        }
+                    }
                 }
             }
+            val wIdx = WIDTHS.indexOfFirst { it.second == ink.widthFactor }.coerceAtLeast(0)
+            Cell("Tratto", onClick = { ink.widthFactor = WIDTHS[(wIdx + 1) % WIDTHS.size].second }) {
+                CellValue(WIDTHS[wIdx].first)
+            }
+            Cell("Gomma", on = ink.eraser, onClick = { ink.eraser = !ink.eraser }) {
+                CellValue(if (ink.eraser) "ON" else "OFF")
+            }
+        }
+        GridRow {
+            Cell("Input", on = stylusOnly, onClick = {
+                stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly)
+            }) {
+                CellValue(if (stylusOnly) "PENNA" else "+ DITO", size = 22)
+            }
+            Cell("Nota", on = noteOpen, onClick = { noteOpen = !noteOpen }) {
+                CellValue(if (noteOpen) "ON" else "OFF")
+            }
+            Cell("Cancella", enabled = ink.strokes.isNotEmpty(), onClick = { ink.clearAll() }) {
+                CellValue("TUTTO", enabled = ink.strokes.isNotEmpty(), size = 22)
+            }
         }
     }
 }
 
+/** Campione di colore quadrato, bordato come un'icona Platinum. */
 @Composable
-private fun ColorDot(color: Int, selected: Boolean, size: Int, onClick: () -> Unit) {
+private fun Swatch(color: Int, size: Int, selected: Boolean = false) {
     Box(
         Modifier
             .size(size.dp)
-            .clip(CircleShape)
+            .border(if (selected) 3.dp else 1.dp, if (selected) P.Accent else P.Ink)
+            .padding(if (selected) 4.dp else 0.dp)
             .background(Color(color))
-            .border(
-                width = if (selected) 3.dp else 1.dp,
-                color = if (selected) Color.White else Color.Gray,
-                shape = CircleShape,
-            )
-            .clickable(onClick = onClick)
     )
 }
