@@ -139,7 +139,7 @@ private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
                     if (text.isNotBlank()) send.putExtra(Intent.EXTRA_TEXT, text)
                     ctx.startActivity(Intent.createChooser(send, "Condividi foto annotata"))
                 } else {
-                    Toast.makeText(ctx, "Salvata in Immagini › FotoNote", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, "Salvata in Immagini › Pastashoot", Toast.LENGTH_SHORT).show()
                     onClose()
                 }
             } catch (e: Exception) {

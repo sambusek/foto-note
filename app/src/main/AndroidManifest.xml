@@ -17,7 +17,7 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="Foto Note"
+        android:label="Pastashoot"
         android:largeHeap="true"
         android:theme="@style/Theme.FotoNote">
 
@@ -34,7 +34,7 @@
             android:name=".EditorActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|density|uiMode"
             android:exported="true"
-            android:label="Annota con Foto Note"
+            android:label="Annota con Pastashoot"
             android:taskAffinity=""
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

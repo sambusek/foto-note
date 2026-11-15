@@ -139,7 +139,7 @@ object AnnotationIO {
     }
 
     /**
-     * Salva la copia annotata in Immagini/FotoNote (l'originale non viene toccato),
+     * Salva la copia annotata in Immagini/Pastashoot (l'originale non viene toccato),
      * scrive la nota nei metadati e memorizza tratti e nota per modifiche future.
      */
     fun save(c: Context, src: Uri, base: Bitmap, strokes: List<Stroke>, note: String): Uri {
@@ -164,7 +164,7 @@ object AnnotationIO {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, outName(cr, src))
                 put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/FotoNote")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Pastashoot")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
             val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
@@ -210,7 +210,7 @@ object AnnotationIO {
             if (ok) break
         }
         dst.setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
-        dst.setAttribute(ExifInterface.TAG_SOFTWARE, "Foto Note")
+        dst.setAttribute(ExifInterface.TAG_SOFTWARE, "Pastashoot")
         if (note.isNotBlank()) {
             val ascii = toAscii(note)
             dst.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, ascii)

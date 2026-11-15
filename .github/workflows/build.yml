@@ -31,19 +31,19 @@ jobs:
         run: gradle assembleDebug -PversionCode=${{ github.run_number }} --stacktrace
 
       - name: Rinomina APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk foto-note.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk pastashoot.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: foto-note-apk
-          path: foto-note.apk
+          name: pastashoot-apk
+          path: pastashoot.apk
 
       - name: Pubblica come release "latest"
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest foto-note.apk \
-            --title "Foto Note — build ${{ github.run_number }}" \
-            --notes "Scarica foto-note.apk dal telefono e installalo. Commit: ${{ github.sha }}" \
+          gh release create latest pastashoot.apk \
+            --title "Pastashoot — build ${{ github.run_number }}" \
+            --notes "Scarica pastashoot.apk dal telefono e installalo. Commit: ${{ github.sha }}" \
             --latest

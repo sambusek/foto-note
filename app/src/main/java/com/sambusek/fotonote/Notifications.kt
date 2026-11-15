@@ -37,7 +37,7 @@ object Notifications {
         )
         return NotificationCompat.Builder(c, CH_SERVICE)
             .setSmallIcon(R.drawable.ic_stat_pen)
-            .setContentTitle("Foto Note attivo")
+            .setContentTitle("Pastashoot attivo")
             .setContentText("Dopo ogni scatto potrai annotare la foto")
             .setOngoing(true)
             .setContentIntent(pi)

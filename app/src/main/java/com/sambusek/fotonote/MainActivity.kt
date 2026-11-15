@@ -115,7 +115,7 @@ private fun MainScreen(tick: MutableIntState) {
         autoOpen = !autoOpen
         Prefs.setAutoOpen(ctx, autoOpen)
         if (autoOpen && !Settings.canDrawOverlays(ctx)) {
-            Toast.makeText(ctx, "Attiva \"Comparsa sopra altre app\" per Foto Note", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, "Attiva \"Comparsa sopra altre app\" per Pastashoot", Toast.LENGTH_LONG).show()
             ctx.startActivity(
                 Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
             )
@@ -147,7 +147,7 @@ private fun MainScreen(tick: MutableIntState) {
             Cell(height = 112.dp) {
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp)) {
                     Text(
-                        "FOTO NOTE", fontSize = 34.sp, fontWeight = FontWeight.Bold,
+                        "PASTASHOOT", fontSize = 34.sp, fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp, color = P.Ink,
                     )
                     Text("Scatta. Annota. Fatto.", fontSize = 15.sp, color = P.Ink2)
@@ -204,13 +204,13 @@ private fun MainScreen(tick: MutableIntState) {
 
         Caption(
             "Scatta con la Fotocamera Samsung: dopo ogni foto arriva una notifica per annotarla con " +
-                "l'S Pen. Gli originali restano intatti; le copie vanno in Immagini › FotoNote.\n\n" +
+                "l'S Pen. Gli originali restano intatti; le copie vanno in Immagini › Pastashoot.\n\n" +
                 "Le celle in lavanda sono attive. Tocca una cella \"NO\" per concedere il permesso; " +
                 "per le foto scegli \"Consenti tutto\".\n\n" +
                 "Batteria: in Impostazioni › Batteria › Limiti di utilizzo in background, aggiungi " +
-                "Foto Note alle \"App mai in sospensione\"." +
+                "Pastashoot alle \"App mai in sospensione\"." +
                 (if (autoOpen && !hasOverlay) "\n\n* Manca il permesso \"Comparsa sopra altre app\": per ora arriva solo la notifica." else "") +
-                "\n\nDalla Galleria: Condividi › \"Annota con Foto Note\" o, con più foto, \"Nota su più foto\"."
+                "\n\nDalla Galleria: Condividi › \"Annota con Pastashoot\" o, con più foto, \"Nota su più foto\"."
         )
     }
 }

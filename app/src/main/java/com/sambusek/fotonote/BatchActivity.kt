@@ -155,7 +155,7 @@ private fun BatchScreen(initial: List<Uri>, onClose: () -> Unit) {
                 done++
             }
             running = false
-            val msg = if (errors == 0) "Nota aggiunta a ${uris.size} foto (Immagini › FotoNote)"
+            val msg = if (errors == 0) "Nota aggiunta a ${uris.size} foto (Immagini › Pastashoot)"
             else "Fatto, ma $errors foto non sono state elaborate"
             Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
             if (errors == 0) onClose()
