@@ -51,4 +51,4 @@ Gli aggiornamenti si installano sopra la versione precedente (la chiave di firma
 
 ## Crediti
 
-Font pixel: Pixelify Sans, © The Pixelify Sans Project Authors, licenza SIL Open Font License 1.1 (vedi `FONT_LICENSE_OFL.txt`).
+Font: IBM Plex Mono, © IBM Corp., licenza SIL Open Font License 1.1 (vedi `FONT_LICENSE_OFL.txt`).

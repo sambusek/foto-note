@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -93,10 +95,10 @@ object P {
     val Ko = Color(0xFFCC3333)
 }
 
-/** Font pixel (Pixelify Sans, licenza OFL) per etichette, titoli piccoli e didascalie. */
+/** Font tecnico per etichette e didascalie (IBM Plex Mono, licenza OFL). */
 val Pixel = FontFamily(
-    Font(R.font.pixel_regular, FontWeight.Normal),
-    Font(R.font.pixel_bold, FontWeight.Bold),
+    Font(R.font.small_regular, FontWeight.Normal),
+    Font(R.font.small_bold, FontWeight.Bold),
 )
 
 /** Testo "di sistema" per pulsanti, valori e titoli delle finestre. */
@@ -228,37 +230,15 @@ private fun Modifier.pinstripes(top: Dp, bottom: Dp): Modifier = drawBehind {
     }
 }
 
-@Composable
-private fun TitleBox(box: Dp, onClick: (() -> Unit)?, content: @Composable BoxScope.() -> Unit = {}) {
-    val tap = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    Box(Modifier.size(box + 20.dp).then(tap), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .size(box)
-                .background(P.Bg)
-                .border(1.dp, P.Ink)
-                .padding(1.dp)
-                .bevel(raised = true),
-            contentAlignment = Alignment.Center,
-            content = content,
-        )
-    }
-}
-
-/**
- * Finestra: barra del titolo a righe, casella di chiusura a sinistra,
- * casella decorativa a destra, ombra netta.
- */
+/** Finestra: barra del titolo a righe con il titolo al centro, ombra netta. */
 @Composable
 fun RetroWindow(
     title: String,
     modifier: Modifier = Modifier,
-    onClose: (() -> Unit)? = null,
     small: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val barH = if (small) 20.dp else 28.dp
-    val boxS = if (small) 10.dp else 14.dp
     Column(
         modifier
             .drawBehind {
@@ -271,15 +251,6 @@ fun RetroWindow(
             .bevel(raised = true)
     ) {
         Box(Modifier.fillMaxWidth().height(barH).pinstripes(6.dp, 5.dp)) {
-            Row(Modifier.fillMaxWidth().fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.background(P.Bg)) { TitleBox(boxS, onClose) }
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.background(P.Bg)) {
-                    TitleBox(boxS, null) {
-                        Box(Modifier.fillMaxWidth().padding(horizontal = 2.dp).height(1.dp).background(P.Ink))
-                    }
-                }
-            }
             Text(
                 title,
                 fontFamily = if (small) Pixel else Sys,
@@ -301,7 +272,10 @@ fun RetroWindow(
 
 // ---------------------------------------------------------------- controlli
 
-/** Pulsante arrotondato; [default] aggiunge l'anello spesso del pulsante predefinito. */
+/**
+ * Pulsante di testo squadrato in rilievo; [default] aggiunge l'anello spesso
+ * del pulsante predefinito.
+ */
 @Composable
 fun PushButton(
     text: String,
@@ -310,34 +284,25 @@ fun PushButton(
     default: Boolean = false,
     enabled: Boolean = true,
 ) {
-    val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val shape = RoundedCornerShape(5.dp)
     val ring = if (default) Modifier
-        .border(3.dp, if (enabled) P.Ink else P.Off, RoundedCornerShape(9.dp))
+        .border(3.dp, if (enabled) P.Ink else P.Off)
         .padding(4.dp) else Modifier
     Box(modifier.then(ring)) {
-        Box(
-            Modifier
-                .heightIn(min = 34.dp)
-                .clip(shape)
-                .background(
-                    if (pressed) Brush.verticalGradient(listOf(P.Dark, P.Ink2))
-                    else Brush.verticalGradient(listOf(P.White, P.BgLight, Color(0xFFCCCCCC)))
-                )
-                .border(1.dp, if (enabled) P.Ink else P.Off, shape)
-                .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 7.dp),
-            contentAlignment = Alignment.Center,
+        BevelBox(
+            null,
+            Modifier.heightIn(min = 40.dp).widthIn(min = 56.dp),
+            enabled = enabled,
+            onClick = onClick,
         ) {
             Text(
                 text,
                 fontFamily = Sys,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
-                color = when { !enabled -> P.Off; pressed -> P.White; else -> P.Ink },
+                color = if (enabled) P.Ink else P.Off,
                 maxLines = 1,
                 softWrap = false,
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp),
             )
         }
     }
@@ -361,6 +326,11 @@ fun RowScope.BevelButton(
     BevelBox(label, modifier.weight(weight).height(height), on, enabled, onClick, content)
 }
 
+/**
+ * Superficie squadrata in rilievo. Alla pressione si "incassa" (rilievo invertito,
+ * fondo più scuro, contenuto spostato di 1 dp) e al tocco lampeggia per un istante
+ * prima di eseguire l'azione, come i pulsanti dei vecchi desktop.
+ */
 @Composable
 fun BevelBox(
     label: String?,
@@ -372,16 +342,28 @@ fun BevelBox(
 ) {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val down = pressed || on
+    var flash by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val down = pressed || flash
+    val sunk = down || on
+    val shift = if (down) 1.dp else 0.dp
     Box(
         modifier
             .border(1.dp, if (enabled) P.Ink else P.Off)
             .padding(1.dp)
-            .background(if (pressed) P.Shade else if (on) P.AccentSoft else P.Bg)
-            .bevel(raised = !down)
+            .background(if (down) P.Shade else if (on) P.AccentSoft else P.Bg)
+            .bevel(raised = !sunk)
             .then(
                 if (onClick != null) Modifier.clickable(
-                    interactionSource = src, indication = null, enabled = enabled, onClick = onClick
+                    interactionSource = src, indication = null, enabled = enabled,
+                    onClick = {
+                        if (!flash) scope.launch {
+                            flash = true
+                            delay(120)
+                            flash = false
+                            onClick()
+                        }
+                    },
                 ) else Modifier
             )
     ) {
@@ -392,11 +374,17 @@ fun BevelBox(
                 fontSize = 11.sp,
                 color = if (!enabled) P.Off else if (on) P.Accent else P.Ink2,
                 maxLines = 1,
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 6.dp, top = 3.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = shift, y = shift)
+                    .padding(start = 6.dp, top = 3.dp),
             )
         }
         Box(
-            Modifier.matchParentSize().padding(top = if (label != null) 12.dp else 0.dp),
+            Modifier
+                .align(Alignment.Center)
+                .offset(x = shift, y = shift)
+                .padding(top = if (label != null) 12.dp else 0.dp),
             contentAlignment = Alignment.Center,
             content = content,
         )
@@ -539,7 +527,7 @@ fun RetroTextField(
 /** Didascalia in font pixel. */
 @Composable
 fun PixelCaption(text: String, modifier: Modifier = Modifier) {
-    Text(text, fontFamily = Pixel, fontSize = 13.sp, lineHeight = 18.sp, color = P.Ink2, modifier = modifier)
+    Text(text, fontFamily = Pixel, fontSize = 12.sp, lineHeight = 18.sp, color = P.Ink2, modifier = modifier)
 }
 
 /** Avviso modale con l'icona di attenzione. */

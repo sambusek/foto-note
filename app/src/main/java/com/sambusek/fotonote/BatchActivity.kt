@@ -176,7 +176,6 @@ private fun BatchScreen(initial: List<Uri>, onClose: () -> Unit) {
         MenuBar("Pastashoot")
         RetroWindow(
             title = "Nota multipla",
-            onClose = { if (!running) onClose() },
             modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
         ) {
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
@@ -241,7 +240,6 @@ private fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCan
         MenuBar("Pastashoot")
         RetroWindow(
             title = if (onlyCamera) "Fotocamera" else "Tutte le immagini",
-            onClose = onCancel,
             modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
         ) {
             Row(

@@ -183,7 +183,6 @@ private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
 
         RetroWindow(
             title = fileName,
-            onClose = { if (unsaved) askExit = true else onClose() },
             modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 4.dp, end = 7.dp, top = 6.dp),
         ) {
             // barra dei comandi
@@ -192,6 +191,7 @@ private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                PushButton("Chiudi", { if (unsaved) askExit = true else onClose() })
                 BevelBox(null, Modifier.size(44.dp), enabled = ink.canUndo, onClick = { ink.undo() }) {
                     BevelValue("↶", enabled = ink.canUndo, size = 20)
                 }
