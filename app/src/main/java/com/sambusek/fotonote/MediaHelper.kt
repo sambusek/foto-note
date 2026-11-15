@@ -52,6 +52,23 @@ object MediaHelper {
         }
     }
 
+    /** Tutte le foto (o solo quelle della fotocamera), più recenti prima. */
+    fun allPhotos(cr: ContentResolver, onlyCamera: Boolean): List<Uri> {
+        val out = ArrayList<Uri>()
+        val sel = if (onlyCamera) "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?" else null
+        val args = if (onlyCamera) arrayOf("$CAMERA_PATH%") else null
+        try {
+            cr.query(
+                collection, arrayOf(MediaStore.Images.Media._ID), sel, args,
+                "${MediaStore.Images.Media.DATE_TAKEN} DESC, ${MediaStore.Images.Media.DATE_ADDED} DESC"
+            )?.use { c ->
+                while (c.moveToNext()) out += ContentUris.withAppendedId(collection, c.getLong(0))
+            }
+        } catch (_: Exception) {
+        }
+        return out
+    }
+
     fun displayName(cr: ContentResolver, uri: Uri): String? = try {
         cr.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null

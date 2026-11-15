@@ -27,6 +27,8 @@ Riaprendo la stessa foto ritrovi tratti e nota modificabili.
 Galleria selezionando più foto › *Condividi › Nota su più foto*. La stessa nota viene aggiunta a
 tutte; i disegni già fatti restano, una nota precedente viene sostituita.
 
+La posizione GPS viene conservata (serve il permesso "posizione nei contenuti multimediali", chiesto al primo avvio).
+
 Puoi annotare anche foto vecchie: dalla Galleria, *Condividi › Annota con Foto Note*.
 
 ## Installazione
