@@ -1,0 +1,157 @@
+package com.sambusek.fotonote
+
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+enum class SkinId(val label: String) { PLATINUM("Platinum"), PLAN9("Plan 9"), SYSTEM7("Sistema 7") }
+
+enum class Desk { DOTS, FLAT, CHECKER }
+enum class TitleBar { PLATINUM, STRIPES_BW, TAG }
+enum class Shadow { SOFT, HARD, NONE }
+
+/** Tutto ciò che distingue una skin dall'altra. */
+data class Skin(
+    val id: SkinId,
+    // scrivania
+    val desk: Color,
+    val deskTex: Color,
+    val deskStyle: Desk,
+    // superfici e testi
+    val bg: Color,          // corpo delle finestre
+    val field: Color,       // campi di testo, liste
+    val ink: Color,
+    val ink2: Color,
+    val off: Color,
+    val hi: Color,          // luce del rilievo
+    val lo: Color,          // ombra del rilievo / linee secondarie
+    val accent: Color,
+    val onBg: Color,        // fondo di un controllo attivo
+    val onInk: Color,       // testo su controllo attivo
+    val pressBg: Color,     // fondo di un controllo premuto
+    val pressInk: Color,
+    val canvas: Color,      // fondo dietro la foto
+    val ok: Color,
+    val ko: Color,
+    // finestre
+    val winBorder: Color,
+    val winBorderW: Dp,
+    val shadow: Shadow,
+    val titleBar: TitleBar,
+    val titleBg: Color,
+    val menuBg: Color,
+    val menuLine: Color,
+    // controlli
+    val bevel: Boolean,
+    val ctlBg: Color,
+    val ctlBorder: Color,
+    val pushRadius: Dp,
+    val progress: List<Color>,
+    val alertFill: Color,
+    // caratteri
+    val titleFont: FontFamily,
+    val bodyFont: FontFamily,
+    val smallFont: FontFamily,
+    val lowercase: Boolean,
+)
+
+private val PlexMono = FontFamily(
+    Font(R.font.small_regular, FontWeight.Normal),
+    Font(R.font.small_bold, FontWeight.Bold),
+)
+private val PixelBold = FontFamily(
+    Font(R.font.chicago_like, FontWeight.Normal),
+    Font(R.font.chicago_like, FontWeight.Bold),
+)
+
+/** Grigi Platinum di fine anni '90, scrivania azzurro-viola, selezione lavanda. */
+val PlatinumSkin = Skin(
+    id = SkinId.PLATINUM,
+    desk = Color(0xFF6363A5), deskTex = Color(0xFF6D6DAE), deskStyle = Desk.DOTS,
+    bg = Color(0xFFDDDDDD), field = Color.White,
+    ink = Color(0xFF111111), ink2 = Color(0xFF444444), off = Color(0xFFA0A0A0),
+    hi = Color.White, lo = Color(0xFF999999),
+    accent = Color(0xFF6666CC), onBg = Color(0xFFCCCCFF), onInk = Color(0xFF111111),
+    pressBg = Color(0xFF999999), pressInk = Color(0xFF111111),
+    canvas = Color(0xFFA4A4A4), ok = Color(0xFF2E9E3E), ko = Color(0xFFCC3333),
+    winBorder = Color(0xFF111111), winBorderW = 1.dp, shadow = Shadow.SOFT,
+    titleBar = TitleBar.PLATINUM, titleBg = Color(0xFFDDDDDD),
+    menuBg = Color(0xFFDDDDDD), menuLine = Color(0xFF111111),
+    bevel = true, ctlBg = Color(0xFFDDDDDD), ctlBorder = Color(0xFF111111), pushRadius = 0.dp,
+    progress = listOf(Color(0xFFCCCCFF), Color(0xFF6666CC), Color(0xFF9999FF)),
+    alertFill = Color(0xFFFFCC00),
+    titleFont = FontFamily.SansSerif, bodyFont = FontFamily.SansSerif, smallFont = PlexMono,
+    lowercase = false,
+)
+
+/** Plan 9 / rio / acme: grigio piatto, bordi viola-blu, tag azzurro pallido, testi su giallo pallido. */
+val Plan9Skin = Skin(
+    id = SkinId.PLAN9,
+    desk = Color(0xFF777777), deskTex = Color(0xFF777777), deskStyle = Desk.FLAT,
+    bg = Color(0xFFFFFFEA), field = Color(0xFFFFFFEA),
+    ink = Color(0xFF000000), ink2 = Color(0xFF333333), off = Color(0xFF99994C),
+    hi = Color(0xFFFFFFEA), lo = Color(0xFF99994C),
+    accent = Color(0xFF8888CC), onBg = Color(0xFFEEEE9E), onInk = Color(0xFF000000),
+    pressBg = Color(0xFF448844), pressInk = Color(0xFFEAFFEA),
+    canvas = Color(0xFFFFFFEA), ok = Color(0xFF448844), ko = Color(0xFFAA0000),
+    winBorder = Color(0xFF8888CC), winBorderW = 4.dp, shadow = Shadow.NONE,
+    titleBar = TitleBar.TAG, titleBg = Color(0xFFEAFFFF),
+    menuBg = Color(0xFFEAFFFF), menuLine = Color(0xFF8888CC),
+    bevel = false, ctlBg = Color(0xFFEAFFEA), ctlBorder = Color(0xFF88CC88), pushRadius = 0.dp,
+    progress = listOf(Color(0xFF99994C), Color(0xFF99994C), Color(0xFF99994C)),
+    alertFill = Color(0xFFEEEE9E),
+    titleFont = PlexMono, bodyFont = PlexMono, smallFont = PlexMono,
+    lowercase = true,
+)
+
+/** Bianco e nero a 1 bit: scacchiera retinata, righe nere, controlli che si invertono. */
+val System7Skin = Skin(
+    id = SkinId.SYSTEM7,
+    desk = Color(0xFFFFFFFF), deskTex = Color(0xFF000000), deskStyle = Desk.CHECKER,
+    bg = Color.White, field = Color.White,
+    ink = Color.Black, ink2 = Color(0xFF222222), off = Color(0xFF999999),
+    hi = Color.White, lo = Color.Black,
+    accent = Color.Black, onBg = Color.Black, onInk = Color.White,
+    pressBg = Color.Black, pressInk = Color.White,
+    canvas = Color.White, ok = Color.Black, ko = Color.White,
+    winBorder = Color.Black, winBorderW = 1.dp, shadow = Shadow.HARD,
+    titleBar = TitleBar.STRIPES_BW, titleBg = Color.White,
+    menuBg = Color.White, menuLine = Color.Black,
+    bevel = false, ctlBg = Color.White, ctlBorder = Color.Black, pushRadius = 7.dp,
+    progress = listOf(Color.Black, Color.Black, Color.Black),
+    alertFill = Color.White,
+    titleFont = PixelBold, bodyFont = FontFamily.SansSerif, smallFont = PlexMono,
+    lowercase = false,
+)
+
+fun skinFor(id: SkinId) = when (id) {
+    SkinId.PLATINUM -> PlatinumSkin
+    SkinId.PLAN9 -> Plan9Skin
+    SkinId.SYSTEM7 -> System7Skin
+}
+
+val LocalSkin = staticCompositionLocalOf { PlatinumSkin }
+
+/** Skin attiva, condivisa da tutte le schermate dell'app. */
+object SkinStore {
+    var current by mutableStateOf(PlatinumSkin)
+        private set
+
+    fun load(c: Context) {
+        val name = c.getSharedPreferences("fotonote", Context.MODE_PRIVATE).getString("skin", null)
+        current = skinFor(SkinId.entries.firstOrNull { it.name == name } ?: SkinId.PLATINUM)
+    }
+
+    fun set(c: Context, id: SkinId) {
+        c.getSharedPreferences("fotonote", Context.MODE_PRIVATE).edit().putString("skin", id.name).apply()
+        current = skinFor(id)
+    }
+}

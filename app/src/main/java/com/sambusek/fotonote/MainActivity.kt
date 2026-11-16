@@ -168,12 +168,12 @@ private fun MainScreen(tick: MutableIntState) {
                         Box(
                             Modifier
                                 .size(52.dp)
-                                .well(P.AccentSoft),
+                                .well(if (LocalSkin.current.id == SkinId.PLATINUM) P.AccentSoft else P.White),
                             contentAlignment = Alignment.Center,
                         ) {
                             Image(
                                 painterResource(R.drawable.ic_stat_pen), null,
-                                colorFilter = ColorFilter.tint(P.Accent),
+                                colorFilter = ColorFilter.tint(if (LocalSkin.current.id == SkinId.PLATINUM) P.Accent else P.Ink),
                                 modifier = Modifier.size(30.dp),
                             )
                         }
@@ -197,6 +197,18 @@ private fun MainScreen(tick: MutableIntState) {
                             BevelButton("Nota multipla", height = 104.dp, onClick = {
                                 ctx.startActivity(BatchActivity.intent(ctx))
                             }) { BigGlyph("≡") }
+                        }
+                    }
+
+                    GroupBox("Aspetto") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            for (id in SkinId.entries) {
+                                BevelButton(
+                                    null, height = 48.dp,
+                                    on = LocalSkin.current.id == id,
+                                    onClick = { SkinStore.set(ctx, id) },
+                                ) { BevelValue(id.label, size = 14) }
+                            }
                         }
                     }
 
@@ -244,5 +256,5 @@ private fun PermRow(label: String, ok: Boolean, onFix: () -> Unit) {
 
 @Composable
 private fun BigGlyph(g: String) {
-    Text(g, fontFamily = Sys, fontWeight = FontWeight.Light, fontSize = 52.sp, color = P.Accent)
+    Text(g, fontFamily = Sys, fontWeight = FontWeight.Light, fontSize = 52.sp, color = glyphInk())
 }

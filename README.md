@@ -52,3 +52,13 @@ Gli aggiornamenti si installano sopra la versione precedente (la chiave di firma
 ## Crediti
 
 Font: IBM Plex Mono, © IBM Corp., licenza SIL Open Font License 1.1 (vedi `FONT_LICENSE_OFL.txt`).
+
+## Skin
+
+Dalla schermata principale (riquadro "Aspetto") si sceglie tra tre stili, definiti in `Skin.kt`:
+
+- **Platinum** — grigi e rilievi da desktop di fine anni '90, scrivania azzurro-viola.
+- **Plan 9** — omaggio a rio/acme: grigio piatto, bordi viola-blu, tag azzurro pallido, testi su giallo pallido, minuscolo e monospazio.
+- **Sistema 7** — bianco e nero a 1 bit: scacchiera retinata, barre a righe nere, controlli che si invertono.
+
+Font aggiuntivo per i titoli di Sistema 7: Pixelify Sans Bold (SIL OFL 1.1).
