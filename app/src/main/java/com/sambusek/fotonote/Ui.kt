@@ -4,6 +4,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.WindowInsets
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.layout.fillMaxSize
+import android.net.Uri
+import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -709,4 +722,101 @@ fun RetroAlert(
 fun CenterNote(text: String) {
     val sk = LocalSkin.current
     Text(text, fontFamily = sk.smallFont, fontSize = 15.sp, color = sk.ink, textAlign = TextAlign.Center)
+}
+
+/** Cornice delle finestre di dialogo, secondo la skin. */
+@Composable
+fun Modifier.dialogFrame(): Modifier {
+    val sk = LocalSkin.current
+    val frame = when (sk.id) {
+        SkinId.PLATINUM -> Modifier
+            .border(1.dp, sk.ink).padding(1.dp).bevel(true).padding(3.dp).border(1.dp, sk.lo)
+        SkinId.SYSTEM7 -> Modifier
+            .border(1.dp, sk.ink).padding(3.dp).border(3.dp, sk.ink)
+        SkinId.PLAN9 -> Modifier.border(4.dp, sk.winBorder)
+    }
+    return this.background(sk.bg).then(frame).padding(16.dp)
+}
+
+/** Dialogo con un campo di testo (es. il nome di un nuovo sopralluogo). */
+@Composable
+fun RetroPrompt(
+    title: String,
+    message: String,
+    placeholder: String,
+    confirm: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sk = LocalSkin.current
+    var text by remember { mutableStateOf("") }
+    Dialog(onDismissRequest = onDismiss) {
+        CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
+            Column(Modifier.fillMaxWidth().dialogFrame()) {
+                Text(tx(title), fontFamily = sk.titleFont, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = sk.ink)
+                Spacer(Modifier.height(6.dp))
+                Text(message, fontFamily = sk.bodyFont, fontSize = 14.sp, color = sk.ink)
+                Spacer(Modifier.height(12.dp))
+                RetroTextField(text, { text = it.replace("\n", " ") }, placeholder, minHeight = 40.dp, maxHeight = 80.dp)
+                Spacer(Modifier.height(16.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                    PushButton("Annulla", onDismiss)
+                    PushButton(confirm, { onConfirm(text.trim()) }, default = true, enabled = text.isNotBlank())
+                }
+            }
+        }
+    }
+}
+
+/** Finestrella non chiudibile che mostra l'avanzamento di un'operazione lunga. */
+@Composable
+fun BusyDialog(message: String, fraction: Float) {
+    val sk = LocalSkin.current
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+    ) {
+        CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
+            Column(Modifier.fillMaxWidth().dialogFrame()) {
+                Text(message, fontFamily = sk.bodyFont, fontSize = 15.sp, color = sk.ink)
+                Spacer(Modifier.height(12.dp))
+                RetroProgress(fraction)
+            }
+        }
+    }
+}
+
+/** Miniatura quadrata di una foto. */
+@Composable
+fun PhotoThumb(uri: Uri, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    val bmp by produceState<Bitmap?>(null, uri) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { ctx.contentResolver.loadThumbnail(uri, android.util.Size(240, 240), null) }.getOrNull()
+        }
+    }
+    Box(modifier.background(LocalSkin.current.canvas)) {
+        bmp?.let {
+            Image(
+                bitmap = it.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/** Impalcatura comune: scrivania, barra dei menu e contenuto. */
+@Composable
+fun DeskScreen(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .desktop()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+    ) {
+        MenuBar("Pastashoot")
+        content()
+    }
 }

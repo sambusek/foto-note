@@ -57,7 +57,17 @@ object AnnotationStore {
         null
     }
 
-    fun save(c: Context, src: Uri, note: String, strokes: List<Stroke>, out: Uri) {
+    /** Bozza: salva tratti e nota sulla foto senza produrre alcun file (staging di sessione). */
+    fun saveDraft(c: Context, src: Uri, note: String, strokes: List<Stroke>) =
+        save(c, src, note, strokes, load(c, src)?.outUri)
+
+    /** Vero se sulla foto ci sono tratti o una nota. */
+    fun hasContent(c: Context, src: Uri): Boolean {
+        val a = load(c, src) ?: return false
+        return a.strokes.isNotEmpty() || a.note.isNotBlank()
+    }
+
+    fun save(c: Context, src: Uri, note: String, strokes: List<Stroke>, out: Uri?) {
         val arr = JSONArray()
         for (s in strokes) {
             val p = JSONArray()
@@ -66,7 +76,7 @@ object AnnotationStore {
         }
         val o = JSONObject()
             .put("source", src.toString())
-            .put("out", out.toString())
+            .put("out", out?.toString() ?: "")
             .put("note", note)
             .put("updated", System.currentTimeMillis())
             .put("strokes", arr)
@@ -95,15 +105,15 @@ object AnnotationIO {
     )
 
     /** Carica la foto già ruotata correttamente, ridotta se oltre 4096 px. */
-    fun loadBitmap(cr: ContentResolver, uri: Uri): Bitmap {
+    fun loadBitmap(cr: ContentResolver, uri: Uri, maxSide: Int = MAX_SIDE): Bitmap {
         val src = ImageDecoder.createSource(cr, uri)
         return ImageDecoder.decodeBitmap(src) { decoder, info, _ ->
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             val w = info.size.width
             val h = info.size.height
             val max = maxOf(w, h)
-            if (max > MAX_SIDE) {
-                val s = MAX_SIDE.toFloat() / max
+            if (max > maxSide) {
+                val s = maxSide.toFloat() / max
                 decoder.setTargetSize((w * s).toInt(), (h * s).toInt())
             }
         }
@@ -180,6 +190,63 @@ object AnnotationIO {
         tmp.delete()
         AnnotationStore.save(c, src, note, strokes, result)
         return result
+    }
+
+    /**
+     * Consolidamento di sessione: scrive in [relPath] la foto con tratti e nota.
+     * Se non c'è nessuna annotazione copia l'originale così com'è (stessa qualità e metadati).
+     * Restituisce l'URI del nuovo file e il suo nome.
+     */
+    fun exportTo(c: Context, src: Uri, strokes: List<Stroke>, note: String, relPath: String): Pair<Uri, String> {
+        val cr = c.contentResolver
+        val orig = MediaHelper.displayName(cr, src)
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ITALY).format(Date())
+        val tmp = File(c.cacheDir, "export.tmp")
+        val mime: String
+        val name: String
+        if (strokes.isEmpty() && note.isBlank()) {
+            mime = cr.getType(src) ?: "image/jpeg"
+            name = orig ?: "$stamp.jpg"
+            val hasLocation = ContextCompat.checkSelfPermission(
+                c, Manifest.permission.ACCESS_MEDIA_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            val input = (if (hasLocation && src.authority == MediaStore.AUTHORITY) {
+                runCatching { cr.openInputStream(MediaStore.setRequireOriginal(src)) }.getOrNull()
+            } else null) ?: cr.openInputStream(src) ?: error("Foto non leggibile")
+            input.use { i -> FileOutputStream(tmp).use { o -> i.copyTo(o) } }
+        } else {
+            mime = "image/jpeg"
+            name = (orig?.substringBeforeLast('.') ?: stamp) + ".jpg"
+            val base = loadBitmap(cr, src)
+            val rendered = render(base, strokes, note)
+            base.recycle()
+            FileOutputStream(tmp).use { rendered.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            rendered.recycle()
+            writeExif(c, src, tmp, note)
+        }
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, relPath)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val target = cr.insert(collection, values) ?: error("Impossibile creare il file")
+        try {
+            cr.openOutputStream(target, "w")?.use { os -> tmp.inputStream().use { it.copyTo(os) } }
+                ?: error("Impossibile scrivere il file")
+        } catch (e: Exception) {
+            runCatching { cr.delete(target, null, null) }
+            throw e
+        } finally {
+            tmp.delete()
+        }
+        val done = ContentValues().apply {
+            put(MediaStore.MediaColumns.IS_PENDING, 0)
+            if (note.isNotBlank()) put(MediaStore.Images.ImageColumns.DESCRIPTION, note)
+        }
+        try { cr.update(target, done, null, null) } catch (_: Exception) {}
+        return target to (MediaHelper.displayName(cr, target) ?: name)
     }
 
     private fun outName(cr: ContentResolver, src: Uri): String {

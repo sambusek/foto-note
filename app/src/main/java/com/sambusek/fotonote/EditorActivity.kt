@@ -72,7 +72,9 @@ class EditorActivity : ComponentActivity() {
             finish(); return
         }
         setContent {
-            PlatinumTheme { EditorScreen(uri, onClose = { finish() }) }
+            // foto di una sessione in corso: le annotazioni restano bozze fino alla chiusura
+            val staging = remember { SessionStore.sessionFor(this, uri) != null }
+            PlatinumTheme { EditorScreen(uri, staging, onClose = { finish() }) }
         }
     }
 }
@@ -90,7 +92,7 @@ private val PALETTE = listOf(
 private val WIDTHS = listOf("S" to 0.002f, "M" to 0.004f, "L" to 0.008f)
 
 @Composable
-private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
+private fun EditorScreen(uri: Uri, staging: Boolean, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val ink = remember { InkState() }
@@ -130,6 +132,14 @@ private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
             try {
                 val strokes = ink.strokes
                 val text = note
+                if (staging) {
+                    withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes) }
+                    ink.dirty = false
+                    savedNote = text
+                    Toast.makeText(ctx, "Salvata nella sessione", Toast.LENGTH_SHORT).show()
+                    onClose()
+                    return@launch
+                }
                 val out = withContext(Dispatchers.IO) {
                     AnnotationIO.save(ctx, uri, bmp, strokes, text)
                 }
@@ -199,7 +209,7 @@ private fun EditorScreen(uri: Uri, onClose: () -> Unit) {
                     BevelValue("↷", enabled = ink.canRedo, size = 20)
                 }
                 Spacer(Modifier.weight(1f))
-                PushButton("Condividi", { save(true) }, enabled = ready)
+                if (!staging) PushButton("Condividi", { save(true) }, enabled = ready)
                 PushButton("Salva", { save(false) }, default = true, enabled = ready)
             }
 

@@ -62,3 +62,20 @@ Dalla schermata principale (riquadro "Aspetto") si sceglie tra tre stili, defini
 - **Sistema 7** — bianco e nero a 1 bit: scacchiera retinata, barre a righe nere, controlli che si invertono.
 
 Font aggiuntivo per i titoli di Sistema 7: Pixelify Sans Bold (SIL OFL 1.1).
+
+## Sopralluoghi (sessioni)
+
+La schermata principale è l'elenco dei sopralluoghi.
+
+1. **Inizia sopralluogo…** e dagli un nome: da quel momento tutte le foto scattate con la fotocamera
+   entrano nella sessione (area di staging).
+2. Nella sessione tocchi una foto per annotarla (S Pen e nota): le annotazioni restano **bozze**
+   sulla singola foto, modificabili quanto vuoi. Tenendo premuto escludi (o riammetti) una foto.
+3. **Chiudi sessione…** consolida tutto: ogni foto viene salvata con tratti e nota in
+   `Immagini/Pastashoot/YYMMDD_NOME`. Le foto senza annotazioni vengono copiate identiche all'originale.
+4. Da un sopralluogo chiuso: **ZIP** (tutte le foto, da condividere) e **PDF** (report multipagina:
+   copertina + una foto per pagina). **Elimina…** rimuove la cartella del sopralluogo, non gli originali.
+
+Aspetto, permessi e strumenti per le foto singole sono in **Impostazioni…**.
+
+Codice: `Session.kt` (modello e operazioni), `SessionActivity.kt` (schermate), `Export.kt` (ZIP e PDF).

@@ -1,0 +1,216 @@
+package com.sambusek.fotonote
+
+import android.content.ContentUris
+import android.content.Context
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/** Una foto consolidata di una sessione chiusa. */
+class SessionItem(val src: String, val out: String, val name: String)
+
+/**
+ * Sessione di sopralluogo. Finché è aperta ([end] = 0) le foto sono quelle scattate
+ * da [start] in poi e le annotazioni restano bozze; alla chiusura vengono consolidate
+ * nella cartella Immagini/Pastashoot/[folder] ed elencate in [items].
+ */
+data class Session(
+    val id: String,
+    val name: String,
+    val folder: String,
+    val start: Long,
+    val end: Long = 0L,
+    val excluded: Set<String> = emptySet(),
+    val items: List<SessionItem> = emptyList(),
+) {
+    val open: Boolean get() = end == 0L
+    val relPath: String get() = "Pictures/Pastashoot/$folder"
+}
+
+object SessionStore {
+    private fun dir(c: Context) = File(c.filesDir, "sessioni").apply { mkdirs() }
+    private fun file(c: Context, id: String) = File(dir(c), "$id.json")
+
+    private fun parse(f: File): Session? = try {
+        val o = JSONObject(f.readText())
+        val ex = o.optJSONArray("excluded") ?: JSONArray()
+        val it = o.optJSONArray("items") ?: JSONArray()
+        Session(
+            id = o.getString("id"),
+            name = o.getString("name"),
+            folder = o.getString("folder"),
+            start = o.getLong("start"),
+            end = o.optLong("end", 0L),
+            excluded = (0 until ex.length()).map { i -> ex.getString(i) }.toSet(),
+            items = (0 until it.length()).map { i ->
+                val x = it.getJSONObject(i)
+                SessionItem(x.getString("src"), x.getString("out"), x.getString("name"))
+            },
+        )
+    } catch (e: Exception) {
+        null
+    }
+
+    fun save(c: Context, s: Session) {
+        val items = JSONArray()
+        for (i in s.items) items.put(JSONObject().put("src", i.src).put("out", i.out).put("name", i.name))
+        val o = JSONObject()
+            .put("id", s.id).put("name", s.name).put("folder", s.folder)
+            .put("start", s.start).put("end", s.end)
+            .put("excluded", JSONArray(s.excluded.toList()))
+            .put("items", items)
+        file(c, s.id).writeText(o.toString())
+    }
+
+    /** Tutte le sessioni, la più recente per prima. */
+    fun all(c: Context): List<Session> =
+        dir(c).listFiles()?.mapNotNull { parse(it) }?.sortedByDescending { it.start } ?: emptyList()
+
+    fun get(c: Context, id: String): Session? = file(c, id).takeIf { it.exists() }?.let { parse(it) }
+
+    /** La sessione in corso, se c'è (una sola alla volta). */
+    fun active(c: Context): Session? = all(c).firstOrNull { it.open }
+
+    fun remove(c: Context, id: String) {
+        file(c, id).delete()
+    }
+
+    /** Nome cartella: YYMMDD_NOME, senza caratteri non ammessi nei nomi di file. */
+    fun folderName(start: Long, name: String): String {
+        val date = SimpleDateFormat("yyMMdd", Locale.ITALY).format(Date(start))
+        val clean = name.trim()
+            .replace(Regex("\\s+"), "_")
+            .replace(Regex("[\\\\/:*?\"<>|.]"), "")
+            .take(40)
+            .ifEmpty { "SOPRALLUOGO" }
+        return "${date}_$clean"
+    }
+
+    fun create(c: Context, name: String): Session {
+        val start = System.currentTimeMillis()
+        val used = all(c).map { it.folder }.toSet()
+        val base = folderName(start, name)
+        var folder = base
+        var n = 2
+        while (folder in used) folder = "${base}_${n++}"
+        val s = Session(id = start.toString(), name = name.trim(), folder = folder, start = start)
+        save(c, s)
+        return s
+    }
+
+    /** Foto scattate durante la sessione (comprese quelle escluse), in ordine di scatto. */
+    fun photos(c: Context, s: Session): List<Photo> {
+        if (!MediaHelper.hasPhotoPermission(c)) return emptyList()
+        return MediaHelper.cameraPhotosBetween(
+            c.contentResolver, s.start / 1000, if (s.open) null else s.end / 1000
+        )
+    }
+
+    /** La sessione in corso, se [uri] è una foto scattata durante quella sessione. */
+    fun sessionFor(c: Context, uri: Uri): Session? {
+        if (uri.authority != MediaStore.AUTHORITY) return null
+        val s = active(c) ?: return null
+        val id = runCatching { ContentUris.parseId(uri) }.getOrNull() ?: return null
+        val p = MediaHelper.cameraPhotoById(c.contentResolver, id) ?: return null
+        return if (p.dateAddedSec >= s.start / 1000) s else null
+    }
+}
+
+/**
+ * Operazioni lunghe sulle sessioni. Girano in un ambito proprio, così non si
+ * interrompono se si esce dalla schermata; [busy] e [progress] ne mostrano lo stato.
+ */
+object SessionOps {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    var busy by mutableStateOf<String?>(null)
+        private set
+    var progress by mutableFloatStateOf(0f)
+        private set
+
+    /** Chiude la sessione: consolida ogni foto non esclusa nella cartella della sessione. */
+    fun close(context: Context, id: String, onDone: (saved: Int, errors: Int) -> Unit) {
+        if (busy != null) return
+        val c = context.applicationContext
+        busy = "Consolidamento delle foto…"; progress = 0f
+        scope.launch {
+            var errors = 0
+            val items = ArrayList<SessionItem>()
+            try {
+                val s = SessionStore.get(c, id)
+                if (s != null && s.open) {
+                    val end = System.currentTimeMillis()
+                    val photos = SessionStore.photos(c, s).filter { it.uri.toString() !in s.excluded }
+                    photos.forEachIndexed { i, p ->
+                        try {
+                            val a = AnnotationStore.load(c, p.uri)
+                            val (out, name) = AnnotationIO.exportTo(
+                                c, p.uri, a?.strokes ?: emptyList(), a?.note ?: "", s.relPath
+                            )
+                            items += SessionItem(p.uri.toString(), out.toString(), name)
+                        } catch (e: Throwable) {
+                            errors++
+                        }
+                        progress = (i + 1f) / photos.size
+                    }
+                    if (photos.isEmpty()) SessionStore.remove(c, id)
+                    else SessionStore.save(c, s.copy(end = end, items = items))
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    busy = null
+                    onDone(items.size, errors)
+                }
+            }
+        }
+    }
+
+    /** Genera lo ZIP o il PDF di una sessione chiusa nella cache, pronto da condividere. */
+    fun export(context: Context, id: String, pdf: Boolean, onDone: (File?) -> Unit) {
+        if (busy != null) return
+        val c = context.applicationContext
+        busy = if (pdf) "Creazione del report PDF…" else "Creazione dello ZIP…"; progress = 0f
+        scope.launch {
+            var result: File? = null
+            try {
+                val s = SessionStore.get(c, id)
+                if (s != null && s.items.isNotEmpty()) {
+                    val dir = File(c.cacheDir, "share").apply { mkdirs() }
+                    dir.listFiles()?.forEach { it.delete() }
+                    val f = File(dir, s.folder + if (pdf) ".pdf" else ".zip")
+                    if (pdf) PdfReport.write(c, s, f) { progress = it }
+                    else Exporter.zip(c, s, f) { progress = it }
+                    result = f
+                }
+            } catch (e: Throwable) {
+                result = null
+            } finally {
+                withContext(Dispatchers.Main) {
+                    busy = null
+                    onDone(result)
+                }
+            }
+        }
+    }
+
+    /** Elimina la sessione e le sue foto consolidate (gli originali della fotocamera restano). */
+    fun delete(context: Context, s: Session) {
+        val c = context.applicationContext
+        for (i in s.items) runCatching { c.contentResolver.delete(Uri.parse(i.out), null, null) }
+        SessionStore.remove(c, s.id)
+    }
+}

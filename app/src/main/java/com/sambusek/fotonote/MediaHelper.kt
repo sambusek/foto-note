@@ -52,6 +52,32 @@ object MediaHelper {
         }
     }
 
+    /** Foto della fotocamera aggiunte in un intervallo di tempo (secondi), in ordine di scatto. */
+    fun cameraPhotosBetween(cr: ContentResolver, startSec: Long, endSec: Long?): List<Photo> {
+        val out = ArrayList<Photo>()
+        var sel = "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ? AND ${MediaStore.Images.Media.DATE_ADDED} >= ?"
+        val args = arrayListOf("$CAMERA_PATH%", startSec.toString())
+        if (endSec != null) {
+            sel += " AND ${MediaStore.Images.Media.DATE_ADDED} <= ?"
+            args += endSec.toString()
+        }
+        try {
+            cr.query(
+                collection,
+                arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED),
+                sel, args.toTypedArray(),
+                "${MediaStore.Images.Media.DATE_ADDED} ASC, ${MediaStore.Images.Media._ID} ASC"
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    out += Photo(id, ContentUris.withAppendedId(collection, id), c.getLong(1))
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return out
+    }
+
     /** Tutte le foto (o solo quelle della fotocamera), più recenti prima. */
     fun allPhotos(cr: ContentResolver, onlyCamera: Boolean): List<Uri> {
         val out = ArrayList<Uri>()
