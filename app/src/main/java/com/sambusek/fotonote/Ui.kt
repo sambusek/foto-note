@@ -59,6 +59,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -318,27 +320,43 @@ fun RetroWindow(
         .bevel(raised = true)
 
     if (sk.titleBar == TitleBar.TAB) {
-        // linguetta del titolo sopra la finestra, larga quanto il titolo
-        Column(modifier) {
-            Box(
-                Modifier
-                    .background(sk.titleBg)
-                    .border(1.dp, sk.winBorder)
-                    .padding(1.dp)
-                    .bevel(raised = true)
-                    .padding(horizontal = if (small) 8.dp else 12.dp, vertical = if (small) 2.dp else 5.dp)
-            ) {
-                Text(
-                    tx(title),
-                    fontFamily = sk.titleFont,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = if (small) 12.sp else 14.sp,
-                    color = sk.ink,
-                    maxLines = 1,
-                    modifier = Modifier.widthIn(max = 260.dp),
-                )
+        // linguetta del titolo sopra la finestra, larga quanto il titolo.
+        // La finestra prende lo spazio che resta: tutta l'altezza disponibile se la
+        // finestra ha un'altezza fissa, solo quella del contenuto in una pagina scorrevole.
+        Layout(
+            modifier = modifier,
+            content = {
+                Box(
+                    Modifier
+                        .background(sk.titleBg)
+                        .border(1.dp, sk.winBorder)
+                        .padding(1.dp)
+                        .bevel(raised = true)
+                        .padding(horizontal = if (small) 8.dp else 12.dp, vertical = if (small) 2.dp else 5.dp)
+                ) {
+                    Text(
+                        tx(title),
+                        fontFamily = sk.titleFont,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = if (small) 12.sp else 14.sp,
+                        color = sk.ink,
+                        maxLines = 1,
+                        modifier = Modifier.widthIn(max = 260.dp),
+                    )
+                }
+                Column(frame) { content() }
+            },
+        ) { measurables, c ->
+            val tab = measurables[0].measure(c.copy(minWidth = 0, minHeight = 0))
+            val maxH = if (c.hasBoundedHeight) (c.maxHeight - tab.height).coerceAtLeast(0) else Constraints.Infinity
+            val minH = (c.minHeight - tab.height).coerceAtLeast(0).coerceAtMost(maxH)
+            val body = measurables[1].measure(
+                Constraints(minWidth = c.maxWidth, maxWidth = c.maxWidth, minHeight = minH, maxHeight = maxH)
+            )
+            layout(c.maxWidth, tab.height + body.height) {
+                tab.place(0, 0)
+                body.place(0, tab.height)
             }
-            Column(Modifier.weight(1f, fill = false).fillMaxWidth().then(frame)) { content() }
         }
         return
     }
