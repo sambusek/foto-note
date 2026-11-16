@@ -150,7 +150,7 @@ fun InkCanvas(
     image: ImageBitmap,
     state: InkState,
     stylusOnly: Boolean,
-    note: String = "",
+    overlay: Overlay? = null,
     modifier: Modifier = Modifier,
     onSwipe: ((Int) -> Unit)? = null,
 ) {
@@ -160,8 +160,8 @@ fun InkCanvas(
     val photoH = image.height.toFloat()
     val maxSide = maxOf(imgW, photoH)
     // anteprima della banda con la nota, come verrà salvata
-    val band = remember(note, image) { NoteBand.create(note, image.width, image.height) }
-    val imgH = photoH + (band?.height ?: 0)
+    val topH = (overlay?.topH ?: 0).toFloat()
+    val imgH = topH + photoH + (overlay?.bottomH ?: 0)
 
     var fitK by remember { mutableFloatStateOf(1f) }
     var k by remember { mutableFloatStateOf(1f) }
@@ -176,7 +176,7 @@ fun InkCanvas(
         val f = min(viewW / imgW, viewH / imgH)
         fitK = f; k = f
         tx = (viewW - imgW * f) / 2f
-        ty = (viewH - imgH * f) / 2f
+        ty = (viewH - imgH * f) / 2f + topH * f
     }
 
     fun toImg(sx: Float, sy: Float) = Offset((sx - tx) / k, (sy - ty) / k)
@@ -294,7 +294,7 @@ fun InkCanvas(
         return true
     }
 
-    LaunchedEffect(imgH) { resetView() }
+    LaunchedEffect(imgH, topH) { resetView() }
 
     Canvas(
         modifier
@@ -310,7 +310,7 @@ fun InkCanvas(
             scale(k, k, pivot = Offset.Zero)
         }) {
             drawImage(image)
-            band?.let { b -> drawIntoCanvas { b.draw(it.nativeCanvas, photoH, imgW) } }
+            overlay?.let { o -> drawIntoCanvas { o.draw(it.nativeCanvas, imgW, photoH) } }
             for (s in state.strokes) drawStrokeC(Color(s.color), s.width, s.points)
             if (state.current.isNotEmpty()) {
                 drawStrokeC(Color(state.color), state.widthFactor * maxSide, state.current)

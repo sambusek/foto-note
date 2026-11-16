@@ -24,7 +24,13 @@ import java.util.Date
 import java.util.Locale
 
 /** Annotazione salvata (per poterla riaprire e modificare). */
-class SavedAnnotation(val note: String, val strokes: List<Stroke>, val outUri: Uri?)
+class SavedAnnotation(
+    val note: String,
+    val strokes: List<Stroke>,
+    val outUri: Uri?,
+    /** Valori dei campi del layout di sessione (id del campo → testo). */
+    val values: Map<String, String> = emptyMap(),
+)
 
 object AnnotationStore {
     private fun key(src: Uri): String =
@@ -50,24 +56,39 @@ object AnnotationStore {
             SavedAnnotation(
                 o.optString("note", ""),
                 strokes,
-                o.optString("out", "").takeIf { it.isNotEmpty() }?.let(Uri::parse)
+                o.optString("out", "").takeIf { it.isNotEmpty() }?.let(Uri::parse),
+                o.optJSONObject("values")?.let { v ->
+                    v.keys().asSequence().associateWith { k -> v.optString(k, "") }
+                } ?: emptyMap(),
             )
         }
     } catch (e: Exception) {
         null
     }
 
-    /** Bozza: salva tratti e nota sulla foto senza produrre alcun file (staging di sessione). */
-    fun saveDraft(c: Context, src: Uri, note: String, strokes: List<Stroke>) =
-        save(c, src, note, strokes, load(c, src)?.outUri)
+    /**
+     * Bozza: salva tratti e testi sulla foto senza produrre alcun file (staging di sessione).
+     * Con [values] nullo i valori dei campi già salvati restano come sono.
+     */
+    fun saveDraft(
+        c: Context, src: Uri, note: String, strokes: List<Stroke>, values: Map<String, String>? = null,
+    ) = save(c, src, note, strokes, load(c, src)?.outUri, values)
 
-    /** Vero se sulla foto ci sono tratti o una nota. */
+    /** Vero se sulla foto ci sono tratti o testi. */
     fun hasContent(c: Context, src: Uri): Boolean {
         val a = load(c, src) ?: return false
-        return a.strokes.isNotEmpty() || a.note.isNotBlank()
+        return a.strokes.isNotEmpty() || a.note.isNotBlank() || a.values.values.any { it.isNotBlank() }
     }
 
-    fun save(c: Context, src: Uri, note: String, strokes: List<Stroke>, out: Uri?) {
+    fun remove(c: Context, src: Uri) {
+        file(c, src).delete()
+    }
+
+    fun save(
+        c: Context, src: Uri, note: String, strokes: List<Stroke>, out: Uri?,
+        values: Map<String, String>? = null,
+    ) {
+        val vals = (values ?: load(c, src)?.values ?: emptyMap()).filterValues { it.isNotBlank() }
         val arr = JSONArray()
         for (s in strokes) {
             val p = JSONArray()
@@ -78,6 +99,7 @@ object AnnotationStore {
             .put("source", src.toString())
             .put("out", out?.toString() ?: "")
             .put("note", note)
+            .put("values", JSONObject(vals as Map<*, *>))
             .put("updated", System.currentTimeMillis())
             .put("strokes", arr)
         file(c, src).writeText(o.toString())
@@ -119,12 +141,19 @@ object AnnotationIO {
         }
     }
 
-    fun render(base: Bitmap, strokes: List<Stroke>, note: String = ""): Bitmap {
-        val band = NoteBand.create(note, base.width, base.height)
-        val out = Bitmap.createBitmap(base.width, base.height + (band?.height ?: 0), Bitmap.Config.ARGB_8888)
+    fun render(
+        base: Bitmap, strokes: List<Stroke>, note: String = "",
+        fields: List<NoteField> = emptyList(), values: Map<String, String> = emptyMap(),
+    ): Bitmap {
+        val overlay = Overlay.create(note, fields, values, base.width, base.height)
+        val out = Bitmap.createBitmap(
+            base.width, overlay.topH + base.height + overlay.bottomH, Bitmap.Config.ARGB_8888
+        )
         val canvas = Canvas(out)
+        // da qui in poi l'origine è l'angolo in alto a sinistra della foto
+        canvas.translate(0f, overlay.topH.toFloat())
         canvas.drawBitmap(base, 0f, 0f, null)
-        band?.draw(canvas, base.height.toFloat(), base.width.toFloat())
+        overlay.draw(canvas, base.width.toFloat(), base.height.toFloat())
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
@@ -197,14 +226,18 @@ object AnnotationIO {
      * Se non c'è nessuna annotazione copia l'originale così com'è (stessa qualità e metadati).
      * Restituisce l'URI del nuovo file e il suo nome.
      */
-    fun exportTo(c: Context, src: Uri, strokes: List<Stroke>, note: String, relPath: String): Pair<Uri, String> {
+    fun exportTo(
+        c: Context, src: Uri, strokes: List<Stroke>, note: String, relPath: String,
+        fields: List<NoteField> = emptyList(), values: Map<String, String> = emptyMap(),
+    ): Pair<Uri, String> {
+        val desc = Overlay.describe(note, fields, values)
         val cr = c.contentResolver
         val orig = MediaHelper.displayName(cr, src)
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ITALY).format(Date())
         val tmp = File(c.cacheDir, "export.tmp")
         val mime: String
         val name: String
-        if (strokes.isEmpty() && note.isBlank()) {
+        if (strokes.isEmpty() && desc.isEmpty()) {
             mime = cr.getType(src) ?: "image/jpeg"
             name = orig ?: "$stamp.jpg"
             val hasLocation = ContextCompat.checkSelfPermission(
@@ -218,11 +251,11 @@ object AnnotationIO {
             mime = "image/jpeg"
             name = (orig?.substringBeforeLast('.') ?: stamp) + ".jpg"
             val base = loadBitmap(cr, src)
-            val rendered = render(base, strokes, note)
+            val rendered = render(base, strokes, note, fields, values)
             base.recycle()
             FileOutputStream(tmp).use { rendered.compress(Bitmap.CompressFormat.JPEG, 92, it) }
             rendered.recycle()
-            writeExif(c, src, tmp, note)
+            writeExif(c, src, tmp, desc)
         }
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
@@ -243,7 +276,7 @@ object AnnotationIO {
         }
         val done = ContentValues().apply {
             put(MediaStore.MediaColumns.IS_PENDING, 0)
-            if (note.isNotBlank()) put(MediaStore.Images.ImageColumns.DESCRIPTION, note)
+            if (desc.isNotEmpty()) put(MediaStore.Images.ImageColumns.DESCRIPTION, desc)
         }
         try { cr.update(target, done, null, null) } catch (_: Exception) {}
         return target to (MediaHelper.displayName(cr, target) ?: name)

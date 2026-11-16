@@ -7,6 +7,9 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -86,7 +89,8 @@ class EditorActivity : ComponentActivity() {
             PlatinumTheme {
                 key(current.toString()) {
                     EditorScreen(
-                        current, staging = session != null, index = index, total = list.size,
+                        current, staging = session != null, fields = session?.fields ?: emptyList(),
+                        index = index, total = list.size,
                         onNavigate = { d -> list.getOrNull(index + d)?.let { current = it } },
                         onClose = { finish() },
                     )
@@ -112,6 +116,7 @@ private val WIDTHS = listOf("S" to 0.002f, "M" to 0.004f, "L" to 0.008f)
 private fun EditorScreen(
     uri: Uri,
     staging: Boolean,
+    fields: List<NoteField>,
     index: Int,
     total: Int,
     onNavigate: (Int) -> Unit,
@@ -125,12 +130,16 @@ private fun EditorScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf("") }
     var savedNote by remember { mutableStateOf("") }
-    var noteOpen by remember { mutableStateOf(false) }
+    var noteOpen by remember { mutableStateOf(fields.isNotEmpty()) }
+    // valori dei campi del layout di sessione
+    val values = remember { mutableStateMapOf<String, String>() }
+    var savedValues by remember { mutableStateOf(emptyMap<String, String>()) }
+    val vals = values.toMap().filterValues { it.isNotBlank() }
     var saving by remember { mutableStateOf(false) }
     var stylusOnly by remember { mutableStateOf(Prefs.stylusOnly(ctx)) }
     var askExit by remember { mutableStateOf(false) }
 
-    val unsaved = ink.dirty || note != savedNote
+    val unsaved = ink.dirty || note != savedNote || vals != savedValues
 
     LaunchedEffect(uri) {
         try {
@@ -140,6 +149,8 @@ private fun EditorScreen(
             if (saved != null) {
                 ink.restore(saved.strokes)
                 note = saved.note; savedNote = saved.note
+                values.putAll(saved.values)
+                savedValues = saved.values.filterValues { it.isNotBlank() }
                 if (saved.note.isNotBlank()) noteOpen = true
             }
             bitmap = bmp
@@ -157,9 +168,11 @@ private fun EditorScreen(
                 val strokes = ink.strokes
                 val text = note
                 if (staging) {
-                    withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes) }
+                    val v = vals
+                    withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes, v) }
                     ink.dirty = false
                     savedNote = text
+                    savedValues = v
                     Toast.makeText(ctx, "Salvata nella sessione", Toast.LENGTH_SHORT).show()
                     onClose()
                     return@launch
@@ -199,7 +212,8 @@ private fun EditorScreen(
             try {
                 val strokes = ink.strokes
                 val text = note
-                withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes) }
+                val v = vals
+                withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes, v) }
                 onNavigate(d)
             } catch (e: Exception) {
                 Toast.makeText(ctx, "Errore nel salvataggio: ${e.message}", Toast.LENGTH_LONG).show()
@@ -281,8 +295,12 @@ private fun EditorScreen(
                     bmp == null -> CenterNote("Apertura in corso…")
                     else -> {
                         val image = remember(bmp) { bmp.asImageBitmap() }
+                        // anteprima dei testi, come verranno stampati
+                        val overlay = remember(note, vals, fields, bmp) {
+                            Overlay.create(note, fields, vals, bmp.width, bmp.height)
+                        }
                         InkCanvas(
-                            image = image, state = ink, stylusOnly = stylusOnly, note = note,
+                            image = image, state = ink, stylusOnly = stylusOnly, overlay = overlay,
                             onSwipe = { d -> go(d) },
                         )
                     }
@@ -298,15 +316,35 @@ private fun EditorScreen(
                 }
             }
 
-            // nota testuale
+            // testi: i campi del layout di sessione e la nota libera
             if (noteOpen) {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 8.dp),
-                    verticalAlignment = Alignment.Top,
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 200.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 6.dp, end = 6.dp, top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
-                    Text("Nota:", fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                        color = P.Ink, modifier = Modifier.padding(top = 10.dp, end = 8.dp))
-                    RetroTextField(note, { note = it }, "Scrivi o detta una nota…", maxHeight = 130.dp)
+                    for (f in fields) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "${f.label}:", fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                                color = P.Ink, maxLines = 1, modifier = Modifier.width(82.dp).padding(end = 6.dp),
+                            )
+                            RetroTextField(
+                                values[f.id] ?: "", { values[f.id] = it.replace("\n", " ") },
+                                f.pos.short, minHeight = 38.dp, maxHeight = 64.dp,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            "Nota:", fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                            color = P.Ink, modifier = Modifier.width(82.dp).padding(top = 10.dp, end = 6.dp),
+                        )
+                        RetroTextField(note, { note = it }, "Scrivi o detta una nota…", maxHeight = 130.dp)
+                    }
                 }
             }
             Spacer(Modifier.height(6.dp))

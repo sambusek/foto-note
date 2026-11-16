@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
@@ -104,7 +106,7 @@ private fun SessionScreen(id: String, tick: MutableIntState, onClose: () -> Unit
 
 // ------------------------------------------------------------------ sessione in corso
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit) {
     val ctx = LocalContext.current
@@ -121,7 +123,39 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     var picking by remember { mutableStateOf(false) }      // aggiunta di foto già scattate
     var selecting by remember { mutableStateOf(false) }    // selezione multipla per la nota
     val selected = remember { mutableStateListOf<String>() }
-    var noteFor by remember { mutableStateOf<String?>(null) } // testo iniziale del dialogo nota
+    var multiOpen by remember { mutableStateOf(false) }    // dialogo del testo per più foto
+    var layoutEdit by remember { mutableStateOf(false) }   // editor del layout delle note
+    var askDiscard by remember { mutableStateOf(false) }
+
+    if (layoutEdit) {
+        LayoutScreen(
+            initial = s.fields,
+            onDone = { f ->
+                SessionStore.save(ctx, s.copy(fields = f))
+                layoutEdit = false
+                tick.intValue++
+            },
+            onCancel = { layoutEdit = false },
+        )
+        return
+    }
+
+    if (askDiscard) {
+        RetroAlert(
+            message = "Eliminare la sessione senza salvare?",
+            detail = "Il sopralluogo \"${s.name}\" e tutte le annotazioni fatte finora andranno persi. " +
+                "Le foto originali restano nella Galleria.",
+            confirm = "Elimina",
+            onConfirm = {
+                askDiscard = false
+                SessionOps.discard(ctx, s)
+                Toast.makeText(ctx, "Sessione eliminata", Toast.LENGTH_SHORT).show()
+                onClose()
+            },
+            dismiss = "Annulla",
+            onDismiss = { askDiscard = false },
+        )
+    }
 
     if (picking) {
         PhotoGrid(
@@ -139,35 +173,40 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
 
     BackHandler(enabled = selecting) { selecting = false; selected.clear() }
 
-    noteFor?.let { initial ->
-        val n = selected.size
-        RetroPrompt(
-            title = "Nota per $n foto",
-            message = "Sostituisce la nota delle foto selezionate; i disegni restano. " +
-                "Lascia vuoto per togliere la nota.",
-            placeholder = "es. Piano 3 – controsoffitto open space",
-            confirm = "Applica",
-            initial = initial,
-            multiline = true,
-            allowEmpty = true,
-            onConfirm = { text ->
-                noteFor = null
+    if (multiOpen) {
+        MultiTextDialog(
+            count = selected.size,
+            fields = s.fields,
+            // se le foto scelte hanno già tutte lo stesso testo, si parte da quello
+            initialFor = { fieldId ->
+                val texts = selected.map { k ->
+                    val a = AnnotationStore.load(ctx, Uri.parse(k))
+                    if (fieldId == null) a?.note ?: "" else a?.values?.get(fieldId) ?: ""
+                }.distinct()
+                if (texts.size == 1) texts[0] else ""
+            },
+            onConfirm = { fieldId, text ->
+                multiOpen = false
                 val targets = selected.toList()
                 scope.launch {
                     withContext(Dispatchers.IO) {
                         for (k in targets) {
                             val uri = Uri.parse(k)
                             val a = AnnotationStore.load(ctx, uri)
-                            AnnotationStore.saveDraft(ctx, uri, text, a?.strokes ?: emptyList())
+                            val strokes = a?.strokes ?: emptyList()
+                            if (fieldId == null) AnnotationStore.saveDraft(ctx, uri, text, strokes)
+                            else AnnotationStore.saveDraft(
+                                ctx, uri, a?.note ?: "", strokes, (a?.values ?: emptyMap()) + (fieldId to text),
+                            )
                         }
                     }
-                    Toast.makeText(ctx, "Nota aggiornata su ${targets.size} foto", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, "Testo aggiornato su ${targets.size} foto", Toast.LENGTH_SHORT).show()
                     selecting = false
                     selected.clear()
                     tick.intValue++
                 }
             },
-            onDismiss = { noteFor = null },
+            onDismiss = { multiOpen = false },
         )
     }
 
@@ -304,7 +343,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                 }
             }
             PixelCaption(
-                if (selecting) "Tocca le foto a cui dare la stessa nota."
+                if (selecting) "Tocca le foto a cui dare lo stesso testo."
                 else "Tocca una foto per annotarla. Tieni premuto per escluderla (o per togliere una foto aggiunta).",
                 Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
             )
@@ -319,20 +358,14 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                         selected.clear()
                         selected.addAll(photos.map { it.uri.toString() }.filter { it !in s.excluded })
                     })
-                    PushButton("Nota a ${selected.size}…", {
-                        // se le foto scelte hanno già tutte la stessa nota, si parte da quella
-                        val notes = selected.map { AnnotationStore.load(ctx, Uri.parse(it))?.note ?: "" }.distinct()
-                        noteFor = if (notes.size == 1) notes[0] else ""
-                    }, default = true, enabled = selected.isNotEmpty())
+                    PushButton("Testo a ${selected.size}…", { multiOpen = true }, default = true, enabled = selected.isNotEmpty())
                 }
             } else {
-                Row(
+                FlowRow(
                     Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    PushButton("Aggiungi foto…", { picking = true })
-                    PushButton("Nota multipla", { selecting = true }, enabled = included > 0)
                     PushButton("Fotocamera", {
                         try {
                             ctx.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
@@ -340,6 +373,9 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                             Toast.makeText(ctx, "Apri la fotocamera dal telefono", Toast.LENGTH_SHORT).show()
                         }
                     })
+                    PushButton("Aggiungi foto…", { picking = true })
+                    PushButton("Layout note…", { layoutEdit = true })
+                    PushButton("Testo multiplo", { selecting = true }, enabled = included > 0)
                 }
                 Row(
                     Modifier.fillMaxWidth().padding(12.dp),
@@ -347,6 +383,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     PushButton("Indietro", onClose)
+                    PushButton("Elimina…", { askDiscard = true })
                     PushButton("Chiudi sessione…", { askClose = true }, default = true)
                 }
             }

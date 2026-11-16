@@ -37,6 +37,8 @@ data class Session(
     val excluded: Set<String> = emptySet(),
     /** Foto scattate prima della sessione e aggiunte a mano. */
     val extra: List<String> = emptyList(),
+    /** Layout delle note: i campi da compilare su ogni foto e dove stamparli. */
+    val fields: List<NoteField> = emptyList(),
     val items: List<SessionItem> = emptyList(),
 ) {
     val open: Boolean get() = end == 0L
@@ -51,6 +53,7 @@ object SessionStore {
         val o = JSONObject(f.readText())
         val ex = o.optJSONArray("excluded") ?: JSONArray()
         val xt = o.optJSONArray("extra") ?: JSONArray()
+        val fl = o.optJSONArray("fields") ?: JSONArray()
         val it = o.optJSONArray("items") ?: JSONArray()
         Session(
             id = o.getString("id"),
@@ -60,6 +63,11 @@ object SessionStore {
             end = o.optLong("end", 0L),
             excluded = (0 until ex.length()).map { i -> ex.getString(i) }.toSet(),
             extra = (0 until xt.length()).map { i -> xt.getString(i) },
+            fields = (0 until fl.length()).mapNotNull { i ->
+                val x = fl.getJSONObject(i)
+                val pos = FieldPos.entries.firstOrNull { p -> p.name == x.optString("pos") } ?: FieldPos.BOTTOM
+                NoteField(x.getString("id"), x.getString("label"), pos)
+            },
             items = (0 until it.length()).map { i ->
                 val x = it.getJSONObject(i)
                 SessionItem(x.getString("src"), x.getString("out"), x.getString("name"))
@@ -72,7 +80,10 @@ object SessionStore {
     fun save(c: Context, s: Session) {
         val items = JSONArray()
         for (i in s.items) items.put(JSONObject().put("src", i.src).put("out", i.out).put("name", i.name))
+        val fields = JSONArray()
+        for (f in s.fields) fields.put(JSONObject().put("id", f.id).put("label", f.label).put("pos", f.pos.name))
         val o = JSONObject()
+            .put("fields", fields)
             .put("id", s.id).put("name", s.name).put("folder", s.folder)
             .put("start", s.start).put("end", s.end)
             .put("excluded", JSONArray(s.excluded.toList()))
@@ -107,12 +118,17 @@ object SessionStore {
 
     fun create(c: Context, name: String): Session {
         val start = System.currentTimeMillis()
-        val used = all(c).map { it.folder }.toSet()
+        val previous = all(c)
+        val used = previous.map { it.folder }.toSet()
         val base = folderName(start, name)
         var folder = base
         var n = 2
         while (folder in used) folder = "${base}_${n++}"
-        val s = Session(id = start.toString(), name = name.trim(), folder = folder, start = start)
+        // il nuovo sopralluogo parte dal layout delle note dell'ultimo
+        val s = Session(
+            id = start.toString(), name = name.trim(), folder = folder, start = start,
+            fields = previous.firstOrNull()?.fields ?: emptyList(),
+        )
         save(c, s)
         return s
     }
@@ -175,7 +191,8 @@ object SessionOps {
                         try {
                             val a = AnnotationStore.load(c, p.uri)
                             val (out, name) = AnnotationIO.exportTo(
-                                c, p.uri, a?.strokes ?: emptyList(), a?.note ?: "", s.relPath
+                                c, p.uri, a?.strokes ?: emptyList(), a?.note ?: "", s.relPath,
+                                s.fields, a?.values ?: emptyMap(),
                             )
                             items += SessionItem(p.uri.toString(), out.toString(), name)
                         } catch (e: Throwable) {
@@ -221,6 +238,19 @@ object SessionOps {
                 }
             }
         }
+    }
+
+    /**
+     * Abbandona una sessione in corso senza salvare nulla: elimina la sessione e le bozze
+     * delle sue foto. Le foto originali restano dove sono.
+     */
+    fun discard(context: Context, s: Session) {
+        val c = context.applicationContext
+        for (p in SessionStore.photos(c, s)) {
+            // le annotazioni già salvate fuori sessione (con una copia in Galleria) restano
+            if (AnnotationStore.load(c, p.uri)?.outUri == null) AnnotationStore.remove(c, p.uri)
+        }
+        SessionStore.remove(c, s.id)
     }
 
     /** Elimina la sessione e le sue foto consolidate (gli originali della fotocamera restano). */
