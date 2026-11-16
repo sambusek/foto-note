@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,8 +74,24 @@ class EditorActivity : ComponentActivity() {
         }
         setContent {
             // foto di una sessione in corso: le annotazioni restano bozze fino alla chiusura
-            val staging = remember { SessionStore.sessionFor(this, uri) != null }
-            PlatinumTheme { EditorScreen(uri, staging, onClose = { finish() }) }
+            val session = remember { SessionStore.sessionFor(this, uri) }
+            // le foto della sessione, per passare dall'una all'altra senza uscire
+            val list = remember {
+                session?.let { s ->
+                    SessionStore.photos(this, s).map { it.uri }.filter { it.toString() !in s.excluded }
+                } ?: emptyList()
+            }
+            var current by remember { mutableStateOf(uri) }
+            val index = list.indexOfFirst { it.toString() == current.toString() }
+            PlatinumTheme {
+                key(current.toString()) {
+                    EditorScreen(
+                        current, staging = session != null, index = index, total = list.size,
+                        onNavigate = { d -> list.getOrNull(index + d)?.let { current = it } },
+                        onClose = { finish() },
+                    )
+                }
+            }
         }
     }
 }
@@ -92,7 +109,14 @@ private val PALETTE = listOf(
 private val WIDTHS = listOf("S" to 0.002f, "M" to 0.004f, "L" to 0.008f)
 
 @Composable
-private fun EditorScreen(uri: Uri, staging: Boolean, onClose: () -> Unit) {
+private fun EditorScreen(
+    uri: Uri,
+    staging: Boolean,
+    index: Int,
+    total: Int,
+    onNavigate: (Int) -> Unit,
+    onClose: () -> Unit,
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val ink = remember { InkState() }
@@ -164,6 +188,27 @@ private fun EditorScreen(uri: Uri, staging: Boolean, onClose: () -> Unit) {
         }
     }
 
+    val canNav = staging && index >= 0 && total > 1
+
+    /** Passa alla foto precedente (-1) o successiva (+1), salvando prima la bozza. */
+    fun go(d: Int) {
+        if (!canNav || saving || (index + d) !in 0 until total) return
+        if (!unsaved) { onNavigate(d); return }
+        saving = true
+        scope.launch {
+            try {
+                val strokes = ink.strokes
+                val text = note
+                withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes) }
+                onNavigate(d)
+            } catch (e: Exception) {
+                Toast.makeText(ctx, "Errore nel salvataggio: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                saving = false
+            }
+        }
+    }
+
     BackHandler(enabled = unsaved) { askExit = true }
 
     if (askExit) {
@@ -192,14 +237,14 @@ private fun EditorScreen(uri: Uri, staging: Boolean, onClose: () -> Unit) {
         MenuBar("Pastashoot")
 
         RetroWindow(
-            title = fileName,
+            title = if (canNav) "$fileName · ${index + 1}/$total" else fileName,
             modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 4.dp, end = 7.dp, top = 6.dp),
         ) {
             // barra dei comandi
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 PushButton("Chiudi", { if (unsaved) askExit = true else onClose() })
                 BevelBox(null, Modifier.size(44.dp), enabled = ink.canUndo, onClick = { ink.undo() }) {
@@ -209,6 +254,14 @@ private fun EditorScreen(uri: Uri, staging: Boolean, onClose: () -> Unit) {
                     BevelValue("↷", enabled = ink.canRedo, size = 20)
                 }
                 Spacer(Modifier.weight(1f))
+                if (canNav) {
+                    BevelBox(null, Modifier.size(44.dp), enabled = index > 0, onClick = { go(-1) }) {
+                        BevelValue("◀", enabled = index > 0, size = 16)
+                    }
+                    BevelBox(null, Modifier.size(44.dp), enabled = index < total - 1, onClick = { go(1) }) {
+                        BevelValue("▶", enabled = index < total - 1, size = 16)
+                    }
+                }
                 if (!staging) PushButton("Condividi", { save(true) }, enabled = ready)
                 PushButton("Salva", { save(false) }, default = true, enabled = ready)
             }
@@ -228,7 +281,10 @@ private fun EditorScreen(uri: Uri, staging: Boolean, onClose: () -> Unit) {
                     bmp == null -> CenterNote("Apertura in corso…")
                     else -> {
                         val image = remember(bmp) { bmp.asImageBitmap() }
-                        InkCanvas(image = image, state = ink, stylusOnly = stylusOnly, note = note)
+                        InkCanvas(
+                            image = image, state = ink, stylusOnly = stylusOnly, note = note,
+                            onSwipe = { d -> go(d) },
+                        )
                     }
                 }
                 if (saving) {

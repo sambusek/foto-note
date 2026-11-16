@@ -79,3 +79,7 @@ La schermata principale è l'elenco dei sopralluoghi.
 Aspetto, permessi e strumenti per le foto singole sono in **Impostazioni…**.
 
 Codice: `Session.kt` (modello e operazioni), `SessionActivity.kt` (schermate), `Export.kt` (ZIP e PDF).
+
+Nella sessione in corso: **Aggiungi foto…** inserisce foto scattate prima dell'inizio; **Nota multipla**
+dà la stessa nota (bozza) a più foto selezionate; nell'editor si passa alla foto precedente o successiva
+con ◀ ▶ o scorrendo con un dito a foto intera (in modalità "solo penna"), salvando la bozza al passaggio.

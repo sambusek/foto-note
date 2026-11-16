@@ -35,6 +35,8 @@ data class Session(
     val start: Long,
     val end: Long = 0L,
     val excluded: Set<String> = emptySet(),
+    /** Foto scattate prima della sessione e aggiunte a mano. */
+    val extra: List<String> = emptyList(),
     val items: List<SessionItem> = emptyList(),
 ) {
     val open: Boolean get() = end == 0L
@@ -48,6 +50,7 @@ object SessionStore {
     private fun parse(f: File): Session? = try {
         val o = JSONObject(f.readText())
         val ex = o.optJSONArray("excluded") ?: JSONArray()
+        val xt = o.optJSONArray("extra") ?: JSONArray()
         val it = o.optJSONArray("items") ?: JSONArray()
         Session(
             id = o.getString("id"),
@@ -56,6 +59,7 @@ object SessionStore {
             start = o.getLong("start"),
             end = o.optLong("end", 0L),
             excluded = (0 until ex.length()).map { i -> ex.getString(i) }.toSet(),
+            extra = (0 until xt.length()).map { i -> xt.getString(i) },
             items = (0 until it.length()).map { i ->
                 val x = it.getJSONObject(i)
                 SessionItem(x.getString("src"), x.getString("out"), x.getString("name"))
@@ -72,6 +76,7 @@ object SessionStore {
             .put("id", s.id).put("name", s.name).put("folder", s.folder)
             .put("start", s.start).put("end", s.end)
             .put("excluded", JSONArray(s.excluded.toList()))
+            .put("extra", JSONArray(s.extra))
             .put("items", items)
         file(c, s.id).writeText(o.toString())
     }
@@ -112,18 +117,29 @@ object SessionStore {
         return s
     }
 
-    /** Foto scattate durante la sessione (comprese quelle escluse), in ordine di scatto. */
+    /**
+     * Foto della sessione: prima quelle aggiunte a mano, poi quelle scattate
+     * durante la sessione in ordine di scatto (comprese le escluse).
+     */
     fun photos(c: Context, s: Session): List<Photo> {
         if (!MediaHelper.hasPhotoPermission(c)) return emptyList()
-        return MediaHelper.cameraPhotosBetween(
+        val shot = MediaHelper.cameraPhotosBetween(
             c.contentResolver, s.start / 1000, if (s.open) null else s.end / 1000
         )
+        val shotKeys = shot.map { it.uri.toString() }.toSet()
+        val added = s.extra.distinct().filter { it !in shotKeys }.mapNotNull { u ->
+            val uri = Uri.parse(u)
+            val id = runCatching { ContentUris.parseId(uri) }.getOrNull() ?: return@mapNotNull null
+            Photo(id, uri, 0L)
+        }
+        return added + shot
     }
 
     /** La sessione in corso, se [uri] è una foto scattata durante quella sessione. */
     fun sessionFor(c: Context, uri: Uri): Session? {
         if (uri.authority != MediaStore.AUTHORITY) return null
         val s = active(c) ?: return null
+        if (uri.toString() in s.extra) return s
         val id = runCatching { ContentUris.parseId(uri) }.getOrNull() ?: return null
         val p = MediaHelper.cameraPhotoById(c.contentResolver, id) ?: return null
         return if (p.dateAddedSec >= s.start / 1000) s else null

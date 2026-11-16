@@ -747,9 +747,12 @@ fun RetroPrompt(
     confirm: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
+    initial: String = "",
+    multiline: Boolean = false,
+    allowEmpty: Boolean = false,
 ) {
     val sk = LocalSkin.current
-    var text by remember { mutableStateOf("") }
+    var text by remember { mutableStateOf(initial) }
     Dialog(onDismissRequest = onDismiss) {
         CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
             Column(Modifier.fillMaxWidth().dialogFrame()) {
@@ -757,11 +760,12 @@ fun RetroPrompt(
                 Spacer(Modifier.height(6.dp))
                 Text(message, fontFamily = sk.bodyFont, fontSize = 14.sp, color = sk.ink)
                 Spacer(Modifier.height(12.dp))
-                RetroTextField(text, { text = it.replace("\n", " ") }, placeholder, minHeight = 40.dp, maxHeight = 80.dp)
+                if (multiline) RetroTextField(text, { text = it }, placeholder, minHeight = 96.dp, maxHeight = 200.dp)
+                else RetroTextField(text, { text = it.replace("\n", " ") }, placeholder, minHeight = 40.dp, maxHeight = 80.dp)
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                     PushButton("Annulla", onDismiss)
-                    PushButton(confirm, { onConfirm(text.trim()) }, default = true, enabled = text.isNotBlank())
+                    PushButton(confirm, { onConfirm(text.trim()) }, default = true, enabled = allowEmpty || text.isNotBlank())
                 }
             }
         }

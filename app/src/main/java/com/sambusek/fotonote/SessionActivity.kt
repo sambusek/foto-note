@@ -7,6 +7,10 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateListOf
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -104,6 +108,7 @@ private fun SessionScreen(id: String, tick: MutableIntState, onClose: () -> Unit
 @Composable
 private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val t = tick.intValue
     val photos = remember(t) { SessionStore.photos(ctx, s) }
     val annotated by produceState(emptySet<String>(), photos, t) {
@@ -113,6 +118,58 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     }
     val included = photos.count { it.uri.toString() !in s.excluded }
     var askClose by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }      // aggiunta di foto già scattate
+    var selecting by remember { mutableStateOf(false) }    // selezione multipla per la nota
+    val selected = remember { mutableStateListOf<String>() }
+    var noteFor by remember { mutableStateOf<String?>(null) } // testo iniziale del dialogo nota
+
+    if (picking) {
+        PhotoGrid(
+            preselected = s.extra.map(Uri::parse),
+            onDone = { sel ->
+                val keys = sel.map { it.toString() }
+                SessionStore.save(ctx, s.copy(extra = keys, excluded = s.excluded - keys.toSet()))
+                picking = false
+                tick.intValue++
+            },
+            onCancel = { picking = false },
+        )
+        return
+    }
+
+    BackHandler(enabled = selecting) { selecting = false; selected.clear() }
+
+    noteFor?.let { initial ->
+        val n = selected.size
+        RetroPrompt(
+            title = "Nota per $n foto",
+            message = "Sostituisce la nota delle foto selezionate; i disegni restano. " +
+                "Lascia vuoto per togliere la nota.",
+            placeholder = "es. Piano 3 – controsoffitto open space",
+            confirm = "Applica",
+            initial = initial,
+            multiline = true,
+            allowEmpty = true,
+            onConfirm = { text ->
+                noteFor = null
+                val targets = selected.toList()
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        for (k in targets) {
+                            val uri = Uri.parse(k)
+                            val a = AnnotationStore.load(ctx, uri)
+                            AnnotationStore.saveDraft(ctx, uri, text, a?.strokes ?: emptyList())
+                        }
+                    }
+                    Toast.makeText(ctx, "Nota aggiornata su ${targets.size} foto", Toast.LENGTH_SHORT).show()
+                    selecting = false
+                    selected.clear()
+                    tick.intValue++
+                }
+            },
+            onDismiss = { noteFor = null },
+        )
+    }
 
     if (askClose) {
         RetroAlert(
@@ -149,7 +206,8 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
             ) {
                 StatusLight(true)
                 PixelCaption(
-                    "In corso · $included foto · ${annotated.size} annotate",
+                    if (selecting) "Selezione · ${selected.size} foto"
+                    else "In corso · $included foto · ${annotated.size} annotate",
                     Modifier.padding(start = 8.dp),
                 )
             }
@@ -172,21 +230,32 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                         itemsIndexed(photos, key = { _, p -> p.id }) { _, p ->
                             val key = p.uri.toString()
                             val excluded = key in s.excluded
+                            val isExtra = key in s.extra
+                            val selIdx = selected.indexOf(key)
                             Box(
                                 Modifier
                                     .aspectRatio(1f)
                                     .combinedClickable(
                                         onClick = {
-                                            if (excluded) {
-                                                Toast.makeText(ctx, "Foto esclusa: tieni premuto per riammetterla", Toast.LENGTH_SHORT).show()
-                                            } else ctx.startActivity(EditorActivity.intent(ctx, p.uri))
+                                            when {
+                                                excluded -> Toast.makeText(
+                                                    ctx, "Foto esclusa: tieni premuto per riammetterla", Toast.LENGTH_SHORT
+                                                ).show()
+                                                selecting -> if (selIdx >= 0) selected.remove(key) else selected.add(key)
+                                                else -> ctx.startActivity(EditorActivity.intent(ctx, p.uri))
+                                            }
                                         },
                                         onLongClick = {
-                                            SessionStore.save(
-                                                ctx,
-                                                s.copy(excluded = if (excluded) s.excluded - key else s.excluded + key),
-                                            )
-                                            tick.intValue++
+                                            if (!selecting) {
+                                                // una foto aggiunta a mano si toglie; una scattata in sessione si esclude
+                                                val next = when {
+                                                    isExtra -> s.copy(extra = s.extra - key)
+                                                    excluded -> s.copy(excluded = s.excluded - key)
+                                                    else -> s.copy(excluded = s.excluded + key)
+                                                }
+                                                SessionStore.save(ctx, next)
+                                                tick.intValue++
+                                            }
                                         },
                                     )
                             ) {
@@ -198,16 +267,35 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                                     ) {
                                         Text("ESCLUSA", fontFamily = Pixel, fontSize = 11.sp, color = Color.White)
                                     }
-                                } else if (key in annotated) {
-                                    Box(
-                                        Modifier
-                                            .align(Alignment.TopEnd)
-                                            .size(24.dp)
-                                            .background(P.Accent)
-                                            .border(1.dp, P.Ink),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Text("✎", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                } else {
+                                    if (key in annotated) {
+                                        Box(
+                                            Modifier
+                                                .align(Alignment.TopEnd)
+                                                .size(24.dp)
+                                                .background(P.Accent)
+                                                .border(1.dp, P.Ink),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text("✎", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    if (selIdx >= 0) {
+                                        Box(
+                                            Modifier
+                                                .fillMaxSize()
+                                                .background(P.Accent.copy(alpha = 0.35f))
+                                                .border(3.dp, P.Accent)
+                                        )
+                                        Box(
+                                            Modifier
+                                                .align(Alignment.BottomStart)
+                                                .size(24.dp)
+                                                .background(P.Ink),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
@@ -216,23 +304,51 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                 }
             }
             PixelCaption(
-                "Tocca una foto per annotarla. Tieni premuto per escluderla dal sopralluogo.",
+                if (selecting) "Tocca le foto a cui dare la stessa nota."
+                else "Tocca una foto per annotarla. Tieni premuto per escluderla (o per togliere una foto aggiunta).",
                 Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
             )
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PushButton("Indietro", onClose)
-                PushButton("Fotocamera", {
-                    try {
-                        ctx.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
-                    } catch (e: Exception) {
-                        Toast.makeText(ctx, "Apri la fotocamera dal telefono", Toast.LENGTH_SHORT).show()
-                    }
-                })
-                PushButton("Chiudi sessione…", { askClose = true }, default = true)
+            if (selecting) {
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PushButton("Annulla", { selecting = false; selected.clear() })
+                    PushButton("Tutte", {
+                        selected.clear()
+                        selected.addAll(photos.map { it.uri.toString() }.filter { it !in s.excluded })
+                    })
+                    PushButton("Nota a ${selected.size}…", {
+                        // se le foto scelte hanno già tutte la stessa nota, si parte da quella
+                        val notes = selected.map { AnnotationStore.load(ctx, Uri.parse(it))?.note ?: "" }.distinct()
+                        noteFor = if (notes.size == 1) notes[0] else ""
+                    }, default = true, enabled = selected.isNotEmpty())
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PushButton("Aggiungi foto…", { picking = true })
+                    PushButton("Nota multipla", { selecting = true }, enabled = included > 0)
+                    PushButton("Fotocamera", {
+                        try {
+                            ctx.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
+                        } catch (e: Exception) {
+                            Toast.makeText(ctx, "Apri la fotocamera dal telefono", Toast.LENGTH_SHORT).show()
+                        }
+                    })
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PushButton("Indietro", onClose)
+                    PushButton("Chiudi sessione…", { askClose = true }, default = true)
+                }
             }
         }
     }

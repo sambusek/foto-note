@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
 
@@ -131,6 +133,9 @@ private class Gesture {
     var prevCx = 0f
     var prevCy = 0f
     var prevSpan = 0f
+    var swipeOk = false
+    var swipeX = 0f
+    var swipeY = 0f
 }
 
 /**
@@ -147,8 +152,10 @@ fun InkCanvas(
     stylusOnly: Boolean,
     note: String = "",
     modifier: Modifier = Modifier,
+    onSwipe: ((Int) -> Unit)? = null,
 ) {
     val density = LocalDensity.current.density
+    val swipe by rememberUpdatedState(onSwipe)
     val imgW = image.width.toFloat()
     val photoH = image.height.toFloat()
     val maxSide = maxOf(imgW, photoH)
@@ -235,11 +242,17 @@ fun InkCanvas(
                 when (g.mode) {
                     Mode.DRAW -> addPoints(ev, !isPen)
                     Mode.ERASE -> { state.beginErase(); addPoints(ev, !isPen) }
-                    Mode.TRANSFORM -> applyTransform(ev)
+                    Mode.TRANSFORM -> {
+                        // a foto intera, un dito che scorre in orizzontale cambia foto
+                        g.swipeOk = k <= fitK * 1.001f
+                        g.swipeX = ev.x; g.swipeY = ev.y
+                        applyTransform(ev)
+                    }
                     Mode.NONE -> {}
                 }
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
+                g.swipeOk = false
                 // un secondo dito mentre si disegna con il dito = zoom
                 if (!isPen && (g.mode == Mode.DRAW || g.mode == Mode.ERASE)) {
                     if (g.mode == Mode.DRAW) state.cancelStroke() else state.endErase()
@@ -260,8 +273,16 @@ fun InkCanvas(
                 when (g.mode) {
                     Mode.DRAW -> state.endStroke(maxSide)
                     Mode.ERASE -> state.endErase()
+                    Mode.TRANSFORM -> if (g.swipeOk) {
+                        val dx = ev.x - g.swipeX
+                        val dy = ev.y - g.swipeY
+                        if (abs(dx) > 64f * density && abs(dx) > 2f * abs(dy)) {
+                            swipe?.invoke(if (dx < 0) 1 else -1)
+                        }
+                    }
                     else -> {}
                 }
+                g.swipeOk = false
                 g.mode = Mode.NONE
             }
             MotionEvent.ACTION_CANCEL -> {

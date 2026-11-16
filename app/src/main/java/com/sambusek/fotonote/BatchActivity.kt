@@ -222,7 +222,7 @@ private fun BatchScreen(initial: List<Uri>, onClose: () -> Unit) {
 
 /** Finestra con le foto del telefono (più recenti prima) e selezione multipla. */
 @Composable
-private fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCancel: () -> Unit) {
+fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCancel: () -> Unit) {
     val ctx = LocalContext.current
     var onlyCamera by remember { mutableStateOf(true) }
     val selected = remember { mutableStateListOf<Uri>().apply { addAll(preselected) } }
