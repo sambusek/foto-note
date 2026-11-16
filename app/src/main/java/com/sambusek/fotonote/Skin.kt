@@ -12,10 +12,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class SkinId(val label: String) { PLATINUM("Platinum"), PLAN9("Plan 9"), SYSTEM7("Sistema 7") }
+enum class SkinId(val label: String) { PLATINUM("Platinum"), PLAN9("Plan 9"), SYSTEM7("Sistema 7"), BEOS("BeOS") }
 
 enum class Desk { DOTS, FLAT, CHECKER }
-enum class TitleBar { PLATINUM, STRIPES_BW, TAG }
+enum class TitleBar { PLATINUM, STRIPES_BW, TAG, TAB }
 enum class Shadow { SOFT, HARD, NONE }
 
 /** Tutto ciò che distingue una skin dall'altra. */
@@ -132,10 +132,32 @@ val System7Skin = Skin(
     lowercase = false,
 )
 
+/**
+ * Omaggio a BeOS: scrivania blu, finestre grigie con la linguetta gialla del titolo
+ * (stretta quanto il titolo, in alto a sinistra), rilievi morbidi, controlli attivi in giallo.
+ */
+val BeSkin = PlatinumSkin.copy(
+    id = SkinId.BEOS,
+    desk = Color(0xFF336698), deskTex = Color(0xFF336698), deskStyle = Desk.FLAT,
+    bg = Color(0xFFD8D8D8), field = Color.White,
+    ink = Color(0xFF000000), ink2 = Color(0xFF404040), off = Color(0xFF9A9A9A),
+    hi = Color.White, lo = Color(0xFF989898),
+    accent = Color(0xFF3A6EA5), onBg = Color(0xFFFFE066), onInk = Color(0xFF000000),
+    pressBg = Color(0xFFA8A8A8), pressInk = Color(0xFF000000),
+    canvas = Color(0xFF9C9C9C),
+    winBorder = Color(0xFF505050), winBorderW = 1.dp, shadow = Shadow.NONE,
+    titleBar = TitleBar.TAB, titleBg = Color(0xFFFFCB00),
+    menuBg = Color(0xFFD8D8D8), menuLine = Color(0xFF505050),
+    bevel = true, ctlBg = Color(0xFFE4E4E4), ctlBorder = Color(0xFF505050), pushRadius = 3.dp,
+    progress = listOf(Color(0xFF8CC8FF), Color(0xFF3298FF), Color(0xFF1E6FCC)),
+    alertFill = Color(0xFFFFCB00),
+)
+
 fun skinFor(id: SkinId) = when (id) {
     SkinId.PLATINUM -> PlatinumSkin
     SkinId.PLAN9 -> Plan9Skin
     SkinId.SYSTEM7 -> System7Skin
+    SkinId.BEOS -> BeSkin
 }
 
 val LocalSkin = staticCompositionLocalOf { PlatinumSkin }

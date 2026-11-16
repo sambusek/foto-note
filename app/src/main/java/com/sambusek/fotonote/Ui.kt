@@ -183,7 +183,7 @@ fun Modifier.bevel(raised: Boolean = true): Modifier {
 fun Modifier.etched(): Modifier {
     val sk = LocalSkin.current
     return when (sk.id) {
-        SkinId.PLATINUM -> drawBehind {
+        SkinId.PLATINUM, SkinId.BEOS -> drawBehind {
             val w = 1.dp.toPx()
             val sw = size.width
             val sh = size.height
@@ -203,7 +203,7 @@ fun Modifier.well(color: Color? = null): Modifier {
     val sk = LocalSkin.current
     val fill = color ?: sk.field
     return when (sk.id) {
-        SkinId.PLATINUM -> this.bevel(raised = false).padding(1.dp).border(1.dp, sk.ink).padding(1.dp).background(fill)
+        SkinId.PLATINUM, SkinId.BEOS -> this.bevel(raised = false).padding(1.dp).border(1.dp, sk.ink).padding(1.dp).background(fill)
         SkinId.PLAN9 -> this.border(1.dp, sk.lo).padding(1.dp).background(fill)
         SkinId.SYSTEM7 -> this.border(1.dp, sk.ink).padding(1.dp).background(fill)
     }
@@ -310,14 +310,40 @@ fun RetroWindow(
         }
         Shadow.NONE -> Modifier
     }
-    Column(
-        modifier
-            .then(shadowMod)
-            .background(sk.bg)
-            .border(sk.winBorderW, sk.winBorder)
-            .padding(sk.winBorderW)
-            .bevel(raised = true)
-    ) {
+    val frame = Modifier
+        .then(shadowMod)
+        .background(sk.bg)
+        .border(sk.winBorderW, sk.winBorder)
+        .padding(sk.winBorderW)
+        .bevel(raised = true)
+
+    if (sk.titleBar == TitleBar.TAB) {
+        // linguetta del titolo sopra la finestra, larga quanto il titolo
+        Column(modifier) {
+            Box(
+                Modifier
+                    .background(sk.titleBg)
+                    .border(1.dp, sk.winBorder)
+                    .padding(1.dp)
+                    .bevel(raised = true)
+                    .padding(horizontal = if (small) 8.dp else 12.dp, vertical = if (small) 2.dp else 5.dp)
+            ) {
+                Text(
+                    tx(title),
+                    fontFamily = sk.titleFont,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = if (small) 12.sp else 14.sp,
+                    color = sk.ink,
+                    maxLines = 1,
+                    modifier = Modifier.widthIn(max = 260.dp),
+                )
+            }
+            Column(Modifier.weight(1f, fill = false).fillMaxWidth().then(frame)) { content() }
+        }
+        return
+    }
+
+    Column(modifier.then(frame)) {
         val titleText = tx(title)
         when (sk.titleBar) {
             TitleBar.PLATINUM, TitleBar.STRIPES_BW -> {
@@ -347,6 +373,7 @@ fun RetroWindow(
                     )
                 }
             }
+            TitleBar.TAB -> {}
             TitleBar.TAG -> {
                 Row(
                     Modifier.fillMaxWidth().height(barH).background(sk.titleBg).padding(horizontal = 8.dp),
@@ -366,7 +393,7 @@ fun RetroWindow(
         }
         Box(
             Modifier.fillMaxWidth().height(1.dp).background(
-                when (sk.id) { SkinId.PLATINUM -> sk.lo; SkinId.PLAN9 -> sk.winBorder; SkinId.SYSTEM7 -> sk.ink }
+                when (sk.id) { SkinId.PLATINUM, SkinId.BEOS -> sk.lo; SkinId.PLAN9 -> sk.winBorder; SkinId.SYSTEM7 -> sk.ink }
             )
         )
         content()
@@ -580,7 +607,7 @@ fun GroupBox(title: String, modifier: Modifier = Modifier, content: @Composable 
 fun StatusLight(ok: Boolean) {
     val sk = LocalSkin.current
     when (sk.id) {
-        SkinId.PLATINUM -> {
+        SkinId.PLATINUM, SkinId.BEOS -> {
             val c = if (ok) sk.ok else sk.ko
             Box(
                 Modifier
@@ -675,7 +702,7 @@ fun RetroAlert(
     Dialog(onDismissRequest = onDismiss) {
         CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
             val frame = when (sk.id) {
-                SkinId.PLATINUM -> Modifier
+                SkinId.PLATINUM, SkinId.BEOS -> Modifier
                     .border(1.dp, sk.ink).padding(1.dp).bevel(true).padding(3.dp).border(1.dp, sk.lo)
                 SkinId.SYSTEM7 -> Modifier
                     .border(1.dp, sk.ink).padding(3.dp).border(3.dp, sk.ink)
@@ -729,7 +756,7 @@ fun CenterNote(text: String) {
 fun Modifier.dialogFrame(): Modifier {
     val sk = LocalSkin.current
     val frame = when (sk.id) {
-        SkinId.PLATINUM -> Modifier
+        SkinId.PLATINUM, SkinId.BEOS -> Modifier
             .border(1.dp, sk.ink).padding(1.dp).bevel(true).padding(3.dp).border(1.dp, sk.lo)
         SkinId.SYSTEM7 -> Modifier
             .border(1.dp, sk.ink).padding(3.dp).border(3.dp, sk.ink)

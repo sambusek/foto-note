@@ -61,6 +61,8 @@ Dalla schermata principale (riquadro "Aspetto") si sceglie tra tre stili, defini
 - **Plan 9** — omaggio a rio/acme: grigio piatto, bordi viola-blu, tag azzurro pallido, testi su giallo pallido, minuscolo e monospazio.
 - **Sistema 7** — bianco e nero a 1 bit: scacchiera retinata, barre a righe nere, controlli che si invertono.
 
+- **BeOS** — scrivania blu, finestre grigie con la linguetta gialla del titolo, controlli attivi in giallo.
+
 Font aggiuntivo per i titoli di Sistema 7: Pixelify Sans Bold (SIL OFL 1.1).
 
 ## Sopralluoghi (sessioni)

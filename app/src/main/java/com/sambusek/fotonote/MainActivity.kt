@@ -289,13 +289,13 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
             RetroWindow("Impostazioni", Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     GroupBox("Aspetto") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             for (id in SkinId.entries) {
                                 BevelButton(
                                     null, height = 44.dp,
                                     on = LocalSkin.current.id == id,
                                     onClick = { SkinStore.set(ctx, id) },
-                                ) { BevelValue(id.label, size = 14) }
+                                ) { BevelValue(id.label, size = 12) }
                             }
                         }
                     }
