@@ -153,7 +153,7 @@ object AnnotationIO {
         // da qui in poi l'origine è l'angolo in alto a sinistra della foto
         canvas.translate(0f, overlay.topH.toFloat())
         canvas.drawBitmap(base, 0f, 0f, null)
-        overlay.draw(canvas, base.width.toFloat(), base.height.toFloat())
+        overlay.draw(canvas, base.height.toFloat())
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND

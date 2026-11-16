@@ -84,7 +84,7 @@ Nella sessione in corso: **Aggiungi foto…** inserisce foto scattate prima dell
 dà la stessa nota (bozza) a più foto selezionate; nell'editor si passa alla foto precedente o successiva
 con ◀ ▶ o scorrendo con un dito a foto intera (in modalità "solo penna"), salvando la bozza al passaggio.
 
-**Layout note…** (per sessione) definisce campi con nome e posizione: banda superiore o inferiore, oppure uno
+**Layout note…** (per sessione) definisce campi con nome e posizione: banda superiore o inferiore, oppure uno (testi sempre in due strisce aggiunte sopra e sotto la foto: angoli 20%, centro 60%)
 dei quattro angoli della foto. Ogni foto ha poi i suoi valori; senza campi resta solo la nota libera, nella
 banda inferiore. Un nuovo sopralluogo parte dal layout dell'ultimo. **Elimina…** in una sessione in corso la
 abbandona senza salvare nulla.

@@ -66,7 +66,7 @@ object SessionStore {
             fields = (0 until fl.length()).mapNotNull { i ->
                 val x = fl.getJSONObject(i)
                 val pos = FieldPos.entries.firstOrNull { p -> p.name == x.optString("pos") } ?: FieldPos.BOTTOM
-                NoteField(x.getString("id"), x.getString("label"), pos)
+                NoteField(x.getString("id"), x.getString("label"), pos, x.optBoolean("showLabel", true))
             },
             items = (0 until it.length()).map { i ->
                 val x = it.getJSONObject(i)
@@ -81,7 +81,7 @@ object SessionStore {
         val items = JSONArray()
         for (i in s.items) items.put(JSONObject().put("src", i.src).put("out", i.out).put("name", i.name))
         val fields = JSONArray()
-        for (f in s.fields) fields.put(JSONObject().put("id", f.id).put("label", f.label).put("pos", f.pos.name))
+        for (f in s.fields) fields.put(JSONObject().put("id", f.id).put("label", f.label).put("pos", f.pos.name).put("showLabel", f.showLabel))
         val o = JSONObject()
             .put("fields", fields)
             .put("id", s.id).put("name", s.name).put("folder", s.folder)

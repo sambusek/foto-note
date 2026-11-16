@@ -310,7 +310,7 @@ fun InkCanvas(
             scale(k, k, pivot = Offset.Zero)
         }) {
             drawImage(image)
-            overlay?.let { o -> drawIntoCanvas { o.draw(it.nativeCanvas, imgW, photoH) } }
+            overlay?.let { o -> drawIntoCanvas { o.draw(it.nativeCanvas, photoH) } }
             for (s in state.strokes) drawStrokeC(Color(s.color), s.width, s.points)
             if (state.current.isNotEmpty()) {
                 drawStrokeC(Color(state.color), state.widthFactor * maxSide, state.current)

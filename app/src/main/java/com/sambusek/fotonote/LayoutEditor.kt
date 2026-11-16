@@ -1,6 +1,10 @@
 package com.sambusek.fotonote
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,10 +58,10 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
             ) {
                 PixelCaption(
                     "Definisci i campi da compilare su ogni foto di questo sopralluogo e dove stamparli. " +
-                        "La nota libera resta sempre nella banda inferiore.",
+                        "I testi stanno sempre in due strisce aggiunte sopra e sotto la foto, mai sopra la foto.",
                     Modifier.padding(top = 10.dp),
                 )
-                GroupBox("Anteprima") { LayoutPreview(fields) }
+                GroupBox("Schema") { LayoutPreview(fields) }
                 GroupBox("Campi") {
                     if (fields.isEmpty()) {
                         PixelCaption("Nessun campo: sulle foto ci sarà solo la nota, nella banda inferiore.")
@@ -65,22 +69,29 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
                     }
                     fields.forEachIndexed { i, f ->
                         key(f.id) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                RetroTextField(
-                                    f.label,
-                                    { fields[i] = NoteField(f.id, it.replace("\n", " "), f.pos) },
-                                    "es. Piano",
-                                    Modifier.weight(1f),
-                                    minHeight = 40.dp, maxHeight = 40.dp,
-                                )
-                                PosButton(f.pos) { fields[i] = NoteField(f.id, f.label, it) }
-                                BevelBox(null, Modifier.size(44.dp), onClick = { fields.removeAt(i) }) {
-                                    BevelValue("✕", size = 16)
+                            Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    RetroTextField(
+                                        f.label,
+                                        { fields[i] = f.copy(label = it.replace("\n", " ")) },
+                                        "es. Piano",
+                                        Modifier.weight(1f),
+                                        minHeight = 40.dp, maxHeight = 40.dp,
+                                    )
+                                    PosButton(f.pos) { fields[i] = f.copy(pos = it) }
+                                    BevelBox(null, Modifier.size(44.dp), onClick = { fields.removeAt(i) }) {
+                                        BevelValue("✕", size = 16)
+                                    }
                                 }
+                                // con l'etichetta: "Piano: 3"; senza: solo "3"
+                                RetroCheckbox(
+                                    f.showLabel, "Mostra l'etichetta prima del testo",
+                                    { fields[i] = f.copy(showLabel = !f.showLabel) },
+                                )
                             }
                         }
                     }
@@ -96,7 +107,7 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
             ) {
                 PushButton("Annulla", onCancel)
                 PushButton("Salva layout", {
-                    onDone(fields.filter { it.label.isNotBlank() }.map { NoteField(it.id, it.label.trim(), it.pos) })
+                    onDone(fields.filter { it.label.isNotBlank() }.map { it.copy(label = it.label.trim()) })
                 }, default = true)
             }
         }
@@ -130,37 +141,57 @@ private fun PosButton(pos: FieldPos, onPick: (FieldPos) -> Unit) {
     }
 }
 
-/** Schema della foto con le bande e gli angoli, e dentro i nomi dei campi. */
+/**
+ * Schema dello spazio per le note: striscia aggiunta sopra e sotto la foto, ciascuna divisa
+ * in angolo sx (20%), banda centrale (60%) e angolo dx (20%), con dentro i nomi dei campi.
+ */
 @Composable
 private fun LayoutPreview(fields: List<NoteField>) {
     fun names(pos: FieldPos) = fields.filter { it.pos == pos && it.label.isNotBlank() }.map { it.label.trim() }
 
     @Composable
-    fun label(text: String, modifier: Modifier = Modifier) {
-        Text(
-            text, fontFamily = Pixel, fontSize = 11.sp, lineHeight = 14.sp, color = Color.White,
-            modifier = modifier.background(Color.Black).padding(horizontal = 6.dp, vertical = 4.dp),
-        )
+    fun RowScope.cell(weight: Float, empty: String, items: List<String>, align: TextAlign) {
+        Box(
+            Modifier
+                .weight(weight)
+                .fillMaxHeight()
+                .border(0.5.dp, Color(0xFF777777))
+                .padding(horizontal = 4.dp, vertical = 5.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                if (items.isEmpty()) empty else items.joinToString("\n"),
+                fontFamily = Pixel, fontSize = 10.sp, lineHeight = 13.sp,
+                color = if (items.isEmpty()) Color(0xFF777777) else Color.White,
+                textAlign = align,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 
-    Column(Modifier.fillMaxWidth().border(1.dp, P.Ink)) {
-        val top = names(FieldPos.TOP)
-        if (top.isNotEmpty()) label(top.joinToString(" · "), Modifier.fillMaxWidth())
-        Box(Modifier.fillMaxWidth().height(130.dp).background(Color(0xFF8A8A8A))) {
-            Text(
-                "FOTO", fontFamily = Pixel, fontSize = 13.sp, color = Color(0xFFCFCFCF),
-                modifier = Modifier.align(Alignment.Center),
-            )
-            val corners = listOf(
-                FieldPos.TL to Alignment.TopStart, FieldPos.TR to Alignment.TopEnd,
-                FieldPos.BL to Alignment.BottomStart, FieldPos.BR to Alignment.BottomEnd,
-            )
-            for ((pos, align) in corners) {
-                val n = names(pos)
-                if (n.isNotEmpty()) label(n.joinToString("\n"), Modifier.align(align))
-            }
+    @Composable
+    fun strip(left: FieldPos, center: FieldPos, right: FieldPos, centerName: String, extra: List<String>) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(Color.Black)) {
+            cell(Strip.SIDE, "sx", names(left), TextAlign.Start)
+            cell(1f - 2 * Strip.SIDE, centerName, names(center) + extra, TextAlign.Center)
+            cell(Strip.SIDE, "dx", names(right), TextAlign.End)
         }
-        label((names(FieldPos.BOTTOM) + "Nota").joinToString(" · "), Modifier.fillMaxWidth())
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        PixelCaption("↓ spazio aggiunto")
+        Column(Modifier.fillMaxWidth().border(1.dp, P.Ink)) {
+            strip(FieldPos.TL, FieldPos.TOP, FieldPos.TR, "banda superiore", emptyList())
+            Box(Modifier.fillMaxWidth().height(110.dp).background(Color(0xFF8A8A8A)), contentAlignment = Alignment.Center) {
+                Text(
+                    "FOTO\nrisoluzione nativa", fontFamily = Pixel, fontSize = 12.sp, lineHeight = 16.sp,
+                    color = Color(0xFFE0E0E0), textAlign = TextAlign.Center,
+                )
+            }
+            // la nota libera sta sempre al centro della banda inferiore
+            strip(FieldPos.BL, FieldPos.BOTTOM, FieldPos.BR, "banda inferiore", listOf("Nota (predefinita)"))
+        }
+        PixelCaption("↑ spazio aggiunto · angoli 20%, banda centrale 60%")
     }
 }
 
