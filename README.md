@@ -48,9 +48,10 @@ La chiave che firma l'APK è privata e **non sta nel repository** (il repository
 potrebbe usarla per firmare un'app falsa che si installa sopra Pastashoot). La build la riceve dai
 secret del repository (*Settings › Secrets and variables › Actions*):
 
-- `SIGNING_KEYSTORE_BASE64` — il file della chiave (`pastashoot.keystore`, PKCS12, alias `pastashoot`) in base64
+- `SIGNING_KEYSTORE_BASE64` — il file della chiave (`pastashoot.keystore`, PKCS12, alias `pastashoot`, chiave EC P-256) in base64
 - `SIGNING_PASSWORD` — la sua password (uguale per keystore e chiave)
-- `SIGNING_OLD_KEYSTORE_BASE64` — la vecchia chiave, già pubblica (`keystore/debug.keystore` nel commit `5ea0c96`), in base64
+- `SIGNING_OLD_KEYSTORE_BASE64` — facoltativo: la vecchia chiave, già pubblica. Se manca, la build la prende
+  dalla storia del repository (`keystore/debug.keystore` nel commit `5ea0c96`) e ne verifica l'impronta
 
 La build firma con **rotazione della chiave** (APK Signature Scheme v3): l'APK dichiara che la nuova chiave
 sostituisce la vecchia, quindi si installa come aggiornamento sopra le versioni precedenti senza perdere dati;

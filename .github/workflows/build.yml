@@ -33,12 +33,19 @@ jobs:
           OLD_KEYSTORE_BASE64: ${{ secrets.SIGNING_OLD_KEYSTORE_BASE64 }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$OLD_KEYSTORE_BASE64" ] || [ -z "$SIGNING_PASSWORD" ]; then
-            echo "::error::Mancano i secret di firma (SIGNING_KEYSTORE_BASE64, SIGNING_OLD_KEYSTORE_BASE64, SIGNING_PASSWORD): vedi README, «Chiave di firma»"
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$SIGNING_PASSWORD" ]; then
+            echo "::error::Mancano i secret di firma (SIGNING_KEYSTORE_BASE64, SIGNING_PASSWORD): vedi README, «Chiave di firma»"
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-          echo "$OLD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/old.keystore"
+          if [ -n "$OLD_KEYSTORE_BASE64" ]; then
+            echo "$OLD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/old.keystore"
+          else
+            # la vecchia chiave è già pubblica: si prende dalla storia del repository
+            git fetch --depth=1 origin 5ea0c9698cb0ef05449399ff4e541054f215fd31
+            git show 5ea0c9698cb0ef05449399ff4e541054f215fd31:keystore/debug.keystore > "$RUNNER_TEMP/old.keystore"
+          fi
+          echo "7efb1041e7da55a82a40668f968cbac804b84624  $RUNNER_TEMP/old.keystore" | sha1sum -c -
 
       - name: Compila APK (non firmato)
         run: gradle assembleRelease -PversionCode=${{ github.run_number }} --stacktrace
