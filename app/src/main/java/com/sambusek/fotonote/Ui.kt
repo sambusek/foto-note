@@ -94,6 +94,8 @@ fun AppScreen(
     bottomBar: (@Composable () -> Unit)? = null,
     brand: Boolean = true,
     maxWidth: Dp = Dp.Unspecified,
+    /** Se presente, intestazione della Home: marchio grande con questo claim, senza titolo. */
+    claim: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // su tablet le schermate di testo restano di larghezza leggibile, centrate
@@ -102,6 +104,20 @@ fun AppScreen(
     // Surface fornisce sfondo e colore del contenuto (testi e icone) giusti per il tema chiaro o scuro
     Surface(Modifier.fillMaxSize(), color = cs.surface, contentColor = cs.onSurface) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        if (claim != null) Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Pastashoot",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = cs.primary,
+                )
+                Text(claim, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+        } else {
         if (brand) Text(
             "Pastashoot",
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
@@ -125,6 +141,7 @@ fun AppScreen(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+        }
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Column(narrow.fillMaxHeight(), content = content)

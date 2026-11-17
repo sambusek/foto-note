@@ -240,7 +240,8 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
     )
 
     AppScreen(
-        title = if (selecting) "${selected.size} selezionati" else "Sopralluoghi",
+        title = if (selecting) "${selected.size} selezionati" else "",
+        claim = if (selecting) null else "Sopralluoghi meno sbatti dal 2026",
         onBack = if (selecting) ({ selected.clear() }) else null,
         actions = {
             if (selecting) {
@@ -266,7 +267,7 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
         val top: @Composable ColumnScope.() -> Unit = {
             Text(
                 "Ciao, $user!", style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 2.dp, top = 4.dp),
+                color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp, top = 4.dp),
             )
             Updater.available?.let { u ->
                 InfoBanner(
