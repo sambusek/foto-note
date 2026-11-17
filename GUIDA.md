@@ -21,7 +21,14 @@ Un sopralluogo raccoglie da solo tutte le foto scattate con la fotocamera del te
 4. Tieni premuta una foto per due scelte: **Escludi dalle versioni** la lascia nel sopralluogo ma fuori da versioni e consolidamento; **Togli dal sopralluogo** la fa sparire dalla griglia, ma resta nella Galleria del telefono. Per riaverla usa **Aggiungi foto già scattate…**.
 5. Per una pausa (pranzo, foto personali) tocca **Metti in pausa**: gli scatti fatti in pausa restano fuori. Riprendi quando torni in cantiere.
 
-Puoi avere un solo sopralluogo in corso alla volta. Lo ritrovi nella Home sotto «Sessione in corso».
+### Più cantieri nella stessa giornata
+
+Puoi tenere aperti più sopralluoghi, ma uno solo alla volta raccoglie le foto. Esempio: inizi nel cantiere A, poi vai nel cantiere B.
+
+1. Dalla Home tocca **Inizia sopralluogo…** per il cantiere B: il sopralluogo A va in pausa da solo e compare sotto «In pausa».
+2. Quando torni al cantiere A, aprilo e tocca **Riprendi**: ora è B ad andare in pausa.
+
+Le foto scattate mentre un sopralluogo è in pausa non entrano in quel sopralluogo.
 
 ## Annotare le foto
 
@@ -58,7 +65,7 @@ I template si gestiscono da Impostazioni › **Template di sopralluogo**. Si pos
 
 Le foto annotate non vengono salvate una per una: escono tutte insieme quando emetti una versione o consolidi. Gli originali restano sempre intatti.
 
-- **Emetti versione** salva le foto annotate in `Immagini › Pastashoot › AAMMGG_NOME_v01`, poi `_v02` e così via. Il sopralluogo resta aperto e modificabile. Le versioni emesse sono in ⋮ › **Versioni emesse**.
+- **Emetti versione** salva le foto annotate in `Immagini › Pastashoot › AAMMGG_NOME_v01`, poi `_v02` e così via. Il sopralluogo resta aperto e modificabile. Le versioni emesse sono in ⋮ › **Versioni emesse**, dove puoi anche eliminarne una con il cestino: si cancellano le sue foto annotate, ma originali, disegni e note restano.
 - **Consolida definitivo** salva la versione finale in `Immagini › Pastashoot › AAMMGG_NOME` e chiude il sopralluogo: da quel momento disegni e note non si modificano più. Nella Home compare con il lucchetto.
 - **Nota generale** (⋮ › **Nota generale…**): un testo sull'intero sopralluogo, che va in testa al PDF e come file di testo nello ZIP.
 
@@ -72,7 +79,7 @@ Da un sopralluogo chiuso puoi creare e condividere:
 1. Sul primo telefono, a sopralluogo aperto: ⋮ › **Esporta per un altro telefono…** e invia il file (mail, Drive, WhatsApp).
 2. Sull'altro telefono: Home › **Importa un sopralluogo…** e scegli il file. Arrivano foto, disegni, note e campi, e si continua da lì.
 
-L'importazione funziona solo se sull'altro telefono non c'è già un sopralluogo in corso.
+Il sopralluogo importato diventa quello in corso; se sull'altro telefono ce n'era già uno, va in pausa.
 
 ## Impostazioni e consigli
 

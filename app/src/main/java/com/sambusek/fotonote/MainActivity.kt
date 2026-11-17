@@ -187,7 +187,10 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
 
     val hasPhotos = remember(t) { MediaHelper.hasPhotoPermission(ctx) }
     val sessions = remember(t) { SessionStore.all(ctx) }
-    val active = sessions.firstOrNull { it.open }
+    // più sopralluoghi aperti: al massimo uno raccoglie le foto, gli altri sono in pausa
+    val open = sessions.filter { it.open }.sortedBy { it.paused }
+    val active = open.firstOrNull { !it.paused }
+    val paused = open.filter { it.paused }
     val closed = sessions.filter { !it.open }
     val activeCount = remember(t, active?.id) {
         active?.let { s -> SessionStore.photos(ctx, s).count { it.uri.toString() !in s.excluded } } ?: 0
@@ -294,7 +297,6 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                     Spacer(Modifier.width(8.dp))
                     Text(active.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
                     active.versionTag?.let { Tag(it) }
-                    if (active.paused) Tag("In pausa", strong = true)
                 }
                 Caption("Iniziata il ${dayTime.format(Date(active.start))} · $activeCount foto")
                 Spacer(Modifier.height(10.dp))
@@ -302,14 +304,29 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                     "Apri la sessione", { ctx.startActivity(SessionActivity.intent(ctx, active.id)) },
                     primary = true, modifier = Modifier.fillMaxWidth(),
                 )
-            } else Section("Nuovo sopralluogo") {
+            }
+
+            if (paused.isNotEmpty()) Section("In pausa") {
+                Caption("Aprili e tocca Riprendi per tornare a raccogliere le foto lì.")
+                paused.forEachIndexed { i, s ->
+                    if (i > 0) ListDivider()
+                    ListRow(
+                        s.name, "Iniziata il ${dayTime.format(Date(s.start))}",
+                        tags = listOfNotNull(s.versionTag?.let { it to false }, "In pausa" to true),
+                    ) { ctx.startActivity(SessionActivity.intent(ctx, s.id)) }
+                }
+            }
+
+            Section("Nuovo sopralluogo") {
                 Caption(
-                    "Inizia una sessione e scatta: le foto finiscono nella sessione, dove le annoti. " +
+                    if (active != null) "«${active.name}» va in pausa e lo riprendi quando vuoi: " +
+                        "utile se nella stessa giornata passi da un cantiere all'altro."
+                    else "Inizia una sessione e scatta: le foto finiscono nella sessione, dove le annoti. " +
                         "Alla chiusura vengono salvate in una cartella dedicata."
                 )
                 Spacer(Modifier.height(10.dp))
                 AppButton(
-                    "Inizia sopralluogo…", { askName = true }, primary = true, enabled = hasPhotos,
+                    "Inizia sopralluogo…", { askName = true }, primary = active == null, enabled = hasPhotos,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -319,11 +336,7 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
             Section("Sopralluoghi salvati") {
                 if (!selecting) {
                     ActionRow(AppIcons.Add, "Importa un sopralluogo…", "Da un file ricevuto da un altro telefono") {
-                        if (active != null) Toast.makeText(
-                            ctx, "C'è già un sopralluogo in corso: consolidalo o eliminalo prima di importarne un altro",
-                            Toast.LENGTH_LONG,
-                        ).show()
-                        else packagePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                        packagePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
                     }
                     ListDivider()
                 }

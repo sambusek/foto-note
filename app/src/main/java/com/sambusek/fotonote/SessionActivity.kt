@@ -103,7 +103,7 @@ private fun SessionScreen(id: String, tick: MutableIntState, onClose: () -> Unit
             CenterMessage("Questa sessione non esiste più.", Modifier.fillMaxWidth())
         }
         session.open -> StagingScreen(session, tick, onClose)
-        else -> ClosedScreen(session, onClose)
+        else -> ClosedScreen(session, tick, onClose)
     }
 }
 
@@ -157,7 +157,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
         return
     }
     if (showReleases) {
-        ReleasesScreen(s, onBack = { showReleases = false })
+        ReleasesScreen(s, onBack = { showReleases = false; tick.intValue++ })
         return
     }
     if (picking) {
@@ -200,9 +200,9 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     )
 
     if (askVersion) ConfirmDialog(
-        title = "Emettere la versione ${s.versions.size + 1}?",
+        title = "Emettere la versione ${s.nextVersion}?",
         text = "Le $included foto verranno salvate con disegni e testi attuali in Immagini › Pastashoot › " +
-            "${s.folder}_v${(s.versions.size + 1).toString().padStart(2, '0')}. " +
+            "${s.folder}_v${s.nextVersion.toString().padStart(2, '0')}. " +
             "Potrai continuare a modificarle ed emettere altre versioni.",
         confirm = "Emetti",
         onConfirm = {
@@ -419,14 +419,14 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
 // ------------------------------------------------------------------ sessione chiusa
 
 @Composable
-private fun ClosedScreen(s: Session, onClose: () -> Unit) {
+private fun ClosedScreen(s: Session, tick: MutableIntState, onClose: () -> Unit) {
     val ctx = LocalContext.current
     var askDelete by remember { mutableStateOf(false) }
     var showReleases by remember { mutableStateOf(false) }
     val export = rememberExport(s)
 
     if (showReleases) {
-        ReleasesScreen(s, onBack = { showReleases = false })
+        ReleasesScreen(s, onBack = { showReleases = false; tick.intValue++ })
         return
     }
 
@@ -504,9 +504,34 @@ private fun ClosedScreen(s: Session, onClose: () -> Unit) {
 
 /** Elenco delle emissioni (definitiva e versioni), ciascuna con ZIP e PDF. */
 @Composable
-private fun ReleasesScreen(s: Session, onBack: () -> Unit) {
+private fun ReleasesScreen(s0: Session, onBack: () -> Unit) {
     BackHandler { onBack() }
+    val ctx = LocalContext.current
+    var s by remember { mutableStateOf(s0) }
     val export = rememberExport(s)
+    var askDelete by remember { mutableStateOf<Release?>(null) }
+    askDelete?.let { r ->
+        ConfirmDialog(
+            title = "Eliminare la ${r.label.lowercase()}?",
+            text = "Le sue ${r.items.size} foto annotate vengono cancellate da Immagini › Pastashoot › ${r.folder}. " +
+                "Le foto originali, i disegni e le note del sopralluogo restano.",
+            confirm = "Elimina",
+            onConfirm = {
+                askDelete = null
+                SessionOps.deleteVersion(ctx, s.id, r.folder) { failed ->
+                    SessionStore.get(ctx, s.id)?.let { s = it }
+                    Toast.makeText(
+                        ctx,
+                        if (failed == 0) "${r.label} eliminata"
+                        else "${r.label} eliminata; $failed foto non cancellate dalla Galleria",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            },
+            dismiss = "Annulla",
+            onDismiss = { askDelete = null },
+        )
+    }
     AppScreen("Versioni emesse", subtitle = s.name, onBack = onBack, maxWidth = ReadableWidth) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 16.dp)) {
             if (s.releases.isEmpty()) CenterMessage("Nessuna versione emessa.", Modifier.fillMaxWidth())
@@ -516,9 +541,14 @@ private fun ReleasesScreen(s: Session, onBack: () -> Unit) {
                     Text(r.label, style = MaterialTheme.typography.titleMedium)
                     Caption("${dateTimeFmt.format(Date(r.time))} · ${r.items.size} foto")
                     Caption("Immagini › Pastashoot › ${r.folder}")
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         AppButton("ZIP…", { export(r, false) }, Modifier.weight(1f), enabled = r.items.isNotEmpty())
                         AppButton("Report PDF", { export(r, true) }, Modifier.weight(1f), primary = true, enabled = r.items.isNotEmpty())
+                        // la versione definitiva non si elimina da qui
+                        if (r.number != null) ToolIcon(AppIcons.Delete, "Elimina la versione", { askDelete = r })
                     }
                 }
             }

@@ -35,6 +35,8 @@ class SessionItem(
 /** Un'emissione: le foto consolidate in una cartella in un certo momento, con la nota generale di allora. */
 class Release(val label: String, val folder: String, val time: Long, val items: List<SessionItem>, val note: String = "") {
     val relPath: String get() = "Pictures/Pastashoot/$folder"
+    /** Numero di una versione intermedia (dal nome della cartella, …_v03 → 3); null per la definitiva. */
+    val number: Int? get() = Regex("_v(\\d+)$").find(folder)?.groupValues?.get(1)?.toIntOrNull()
 }
 
 /** Una pausa della sessione; [end] = 0 se è ancora in corso. */
@@ -72,8 +74,10 @@ data class Session(
     val paused: Boolean get() = open && pauses.lastOrNull()?.end == 0L
     fun inPause(ms: Long): Boolean = pauses.any { ms >= it.start && (it.end == 0L || ms <= it.end) }
     val finalRelease: Release? get() = if (open) null else Release("Definitiva", folder, end, items, generalNote)
+    /** Numero della prossima versione: dopo l'ultima ancora presente, anche se ne sono state eliminate. */
+    val nextVersion: Int get() = (versions.mapNotNull { it.number }.maxOrNull() ?: 0) + 1
     /** Etichetta dell'ultima versione emessa, es. "V02"; null se non ce ne sono. */
-    val versionTag: String? get() = if (versions.isEmpty()) null else "V" + versions.size.toString().padStart(2, '0')
+    val versionTag: String? get() = versions.mapNotNull { it.number }.maxOrNull()?.let { "V" + it.toString().padStart(2, '0') }
 
     /** Tutte le emissioni, la più recente per prima. */
     val releases: List<Release> get() = listOfNotNull(finalRelease) + versions.reversed()
@@ -197,8 +201,17 @@ object SessionStore {
 
     fun get(c: Context, id: String): Session? = file(c, id).takeIf { it.exists() }?.let(::parse)
 
-    /** La sessione in corso, se c'è (una sola alla volta). */
-    fun active(c: Context): Session? = all(c).firstOrNull { it.open }
+    /**
+     * La sessione che sta raccogliendo le foto: aperta e non in pausa. Ce n'è al massimo una;
+     * le altre aperte sono in pausa (es. cantiere A interrotto per un sopralluogo nel cantiere B).
+     */
+    fun running(c: Context): Session? = all(c).firstOrNull { it.open && !it.paused }
+
+    /** Mette in pausa ogni sessione che sta raccogliendo foto, tranne [keepId]. */
+    fun pauseOthers(c: Context, keepId: String? = null) {
+        val now = System.currentTimeMillis()
+        all(c).filter { it.open && !it.paused && it.id != keepId }.forEach { save(c, it.copy(pauses = it.pauses + Pause(now))) }
+    }
 
     fun remove(c: Context, id: String) {
         file(c, id).delete()
@@ -207,6 +220,8 @@ object SessionStore {
 
     /** Mette in pausa la sessione o la riprende. */
     fun togglePause(c: Context, s: Session): Session {
+        // riprendendo questa, le altre in corso vanno in pausa: le foto finiscono in una sola sessione
+        if (s.paused) pauseOthers(c, s.id)
         val now = System.currentTimeMillis()
         val pauses = if (s.paused) s.pauses.dropLast(1) + s.pauses.last().copy(end = now) else s.pauses + Pause(now)
         return s.copy(pauses = pauses).also { save(c, it) }
@@ -229,6 +244,7 @@ object SessionStore {
 
     /** Nuova sessione, con i campi di un template oppure senza campi. */
     fun create(c: Context, name: String, fields: List<NoteField> = emptyList()): Session {
+        pauseOthers(c)
         val start = System.currentTimeMillis()
         val folder = uniqueFolder(c, folderName(start, name))
         return Session(id = start.toString(), name = name.trim(), folder = folder, start = start, fields = fields)
@@ -257,7 +273,7 @@ object SessionStore {
     /** La sessione in corso, se [uri] è una foto di quella sessione. */
     fun sessionFor(c: Context, uri: Uri): Session? {
         if (uri.authority != MediaStore.AUTHORITY) return null
-        val s = active(c) ?: return null
+        val s = running(c) ?: return null
         if (uri.toString() in s.extra) return s
         if (uri.toString() in s.removed) return null
         val id = runCatching { ContentUris.parseId(uri) }.getOrNull() ?: return null
@@ -359,7 +375,7 @@ object SessionOps {
         var errors = 0
         launchOp("Emissione della versione…", {
             val s = SessionStore.get(c, id)!!
-            val n = s.versions.size + 1
+            val n = s.nextVersion
             val folder = "${s.folder}_v" + n.toString().padStart(2, '0')
             val (items, e) = consolidate(c, s, "Pictures/Pastashoot/$folder")
             errors = e
@@ -370,6 +386,24 @@ object SessionOps {
                 SessionStore.save(c, now.copy(versions = now.versions + it))
             }
         }) { onDone(it, errors) }
+    }
+
+    /** Elimina una versione intermedia: le sue foto nella Galleria e la voce nella sessione. */
+    fun deleteVersion(context: Context, id: String, folder: String, onDone: (failed: Int) -> Unit) {
+        val c = context.applicationContext
+        launchOp("Eliminazione della versione…", {
+            val s = SessionStore.get(c, id)!!
+            val r = s.versions.first { it.folder == folder }
+            var failed = 0
+            r.items.forEachIndexed { i, item ->
+                runCatching { c.contentResolver.delete(Uri.parse(item.out), null, null) }
+                    .onFailure { failed++ }
+                progress = (i + 1f) / r.items.size.coerceAtLeast(1)
+            }
+            val now = SessionStore.get(c, id) ?: s
+            SessionStore.save(c, now.copy(versions = now.versions.filter { it.folder != folder }))
+            failed
+        }) { onDone(it ?: 0) }
     }
 
     /** Consolidamento definitivo: salva nella cartella della sessione e la chiude. */

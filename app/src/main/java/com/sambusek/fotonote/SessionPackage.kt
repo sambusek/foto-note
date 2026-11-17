@@ -76,9 +76,6 @@ object SessionPackage {
      * la nuova sessione in corso, con disegni e testi. Le foto scattate da ora si aggiungono.
      */
     fun import(c: Context, uri: Uri, onProgress: (Float) -> Unit): Session {
-        check(SessionStore.active(c) == null) {
-            "C'è già un sopralluogo in corso: consolidalo o eliminalo prima di importarne un altro"
-        }
         val cr = c.contentResolver
         var manifest: JSONObject? = null
         val imported = HashMap<String, Uri>()
@@ -127,6 +124,7 @@ object SessionPackage {
             end = 0L,
             extra = uris.map { it.toString() },
         )
+        SessionStore.pauseOthers(c)
         SessionStore.save(c, session)
         return session
     }
