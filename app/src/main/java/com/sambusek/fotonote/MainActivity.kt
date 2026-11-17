@@ -399,6 +399,25 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
     var monitoring by remember { mutableStateOf(Prefs.isMonitoring(ctx)) }
     var autoOpen by remember { mutableStateOf(Prefs.autoOpen(ctx)) }
     var name by remember { mutableStateOf(Prefs.userName(ctx)) }
+    var token by remember { mutableStateOf(Prefs.githubToken(ctx)) }
+    var autoCheck by remember { mutableStateOf(Prefs.autoUpdateCheck(ctx)) }
+    var updateStatus by remember { mutableStateOf<String?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val build = remember { Updater.currentBuild(ctx) }
+    SessionOps.busy?.let { ProgressDialog(it, SessionOps.progress) }
+
+    fun checkUpdates() {
+        checking = true; updateStatus = null
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { Updater.check(ctx) }
+            checking = false
+            updateStatus = r.fold(
+                { if (it.build > build) "È disponibile la build ${it.build}." else "Hai già l'ultima versione (build ${it.build})." },
+                { "Controllo non riuscito: ${it.message}" },
+            )
+        }
+    }
     val version = remember {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
     }
@@ -442,6 +461,29 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
                     if (it.isNotBlank()) { Prefs.setUserName(ctx, it); onNameChange(it.trim()) }
                 }, "Nome e cognome")
                 Caption("Usato nei report PDF e nel campo automatico \"Nome utente\".", Modifier.padding(top = 4.dp))
+            }
+
+            Section("Aggiornamenti") {
+                Caption("Versione installata: $version (build $build)")
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppButton(if (checking) "Controllo…" else "Controlla aggiornamenti", { checkUpdates() }, enabled = !checking)
+                    Updater.available?.let { u ->
+                        AppButton("Installa build ${u.build}", { Updater.downloadAndInstall(ctx, u) }, primary = true)
+                    }
+                }
+                updateStatus?.let { Caption(it, Modifier.padding(top = 6.dp)) }
+                SwitchRow("Controlla all'apertura dell'app", autoCheck, {
+                    autoCheck = !autoCheck; Prefs.setAutoUpdateCheck(ctx, autoCheck)
+                })
+                CompactField(
+                    token, { token = it; Prefs.setGithubToken(ctx, it) },
+                    "Token GitHub (solo se il repository è privato)", secret = true,
+                )
+                Caption(
+                    "Gli aggiornamenti arrivano dalla release \"latest\" su GitHub. Se il repository è privato " +
+                        "serve un token di sola lettura (fine-grained, permesso Contents: Read-only).",
+                    Modifier.padding(top = 4.dp),
+                )
             }
 
             Section("Template di sopralluogo") {

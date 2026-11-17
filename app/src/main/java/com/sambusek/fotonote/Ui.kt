@@ -3,6 +3,8 @@ package com.sambusek.fotonote
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -231,6 +233,7 @@ fun CompactField(
     singleLine: Boolean = true,
     maxHeight: androidx.compose.ui.unit.Dp = 120.dp,
     enabled: Boolean = true,
+    secret: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(4.dp)
@@ -244,6 +247,7 @@ fun CompactField(
         singleLine = singleLine,
         textStyle = style,
         cursorBrush = SolidColor(cs.primary),
+        visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 40.dp, max = if (singleLine) 40.dp else maxHeight)
