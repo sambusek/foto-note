@@ -14,19 +14,31 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableIntState
@@ -38,25 +50,27 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    /** Cresce a ogni ritorno sulla schermata, per rileggere sessioni e permessi. */
     private val tick = mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        platinumEdgeToEdge()
+        enableEdgeToEdge()
         Notifications.createChannels(this)
         if (Prefs.isMonitoring(this) && MediaHelper.hasPhotoPermission(this)) ServiceControl.start(this)
         setContent {
-            PlatinumTheme {
+            AppTheme {
                 var settings by rememberSaveable { mutableStateOf(false) }
                 if (settings) SettingsScreen(tick) { settings = false }
                 else HomeScreen(tick) { settings = true }
@@ -73,14 +87,13 @@ class MainActivity : ComponentActivity() {
 private fun granted(c: Context, p: String) =
     ContextCompat.checkSelfPermission(c, p) == PackageManager.PERMISSION_GRANTED
 
-private fun photoPerms(): Array<String> {
-    val list = mutableListOf(Manifest.permission.ACCESS_MEDIA_LOCATION)
+private fun photoPerms(): Array<String> = buildList {
+    add(Manifest.permission.ACCESS_MEDIA_LOCATION)
     if (Build.VERSION.SDK_INT >= 33) {
-        list += Manifest.permission.READ_MEDIA_IMAGES
-        list += Manifest.permission.POST_NOTIFICATIONS
-    } else list += Manifest.permission.READ_EXTERNAL_STORAGE
-    return list.toTypedArray()
-}
+        add(Manifest.permission.READ_MEDIA_IMAGES)
+        add(Manifest.permission.POST_NOTIFICATIONS)
+    } else add(Manifest.permission.READ_EXTERNAL_STORAGE)
+}.toTypedArray()
 
 private val dayTime = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY)
 private val dayOnly = SimpleDateFormat("dd/MM/yyyy", Locale.ITALY)
@@ -90,11 +103,10 @@ private val dayOnly = SimpleDateFormat("dd/MM/yyyy", Locale.ITALY)
 @Composable
 private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
     val ctx = LocalContext.current
-    val t = tick.intValue // si aggiorna a ogni ritorno sulla schermata
-
-    val permLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { tick.intValue++ }
+    val t = tick.intValue
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        tick.intValue++
+    }
 
     val hasPhotos = remember(t) { MediaHelper.hasPhotoPermission(ctx) }
     val sessions = remember(t) { SessionStore.all(ctx) }
@@ -105,83 +117,60 @@ private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
     }
     var askName by remember { mutableStateOf(false) }
 
-    if (askName) {
-        RetroPrompt(
-            title = "Nuovo sopralluogo",
-            message = "Dai un nome alla sessione: diventerà il nome della cartella.",
-            placeholder = "es. Via Roma piano 3",
-            confirm = "Inizia",
-            onConfirm = { name ->
-                askName = false
-                val s = SessionStore.create(ctx, name)
-                ctx.startActivity(SessionActivity.intent(ctx, s.id))
-            },
-            onDismiss = { askName = false },
-        )
-    }
+    if (askName) PromptDialog(
+        title = "Nuovo sopralluogo",
+        message = "Il nome diventerà anche il nome della cartella.",
+        placeholder = "es. Via Roma piano 3",
+        confirm = "Inizia",
+        onConfirm = { name ->
+            askName = false
+            ctx.startActivity(SessionActivity.intent(ctx, SessionStore.create(ctx, name).id))
+        },
+        onDismiss = { askName = false },
+    )
 
-    DeskScreen {
+    AppScreen("Sopralluoghi", actions = { ToolIcon(AppIcons.Tune, "Impostazioni", onSettings) }) {
         Column(
             Modifier
-                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .windowPad(start = 10.dp, end = 13.dp, top = 14.dp, bottom = 16.dp)
+                .padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
         ) {
-            RetroWindow(
-                "Sopralluoghi", Modifier.fillMaxWidth(),
-                actions = { ToolIcon(AppIcons.Tune, "Impostazioni", onSettings) },
-            ) {
-                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 16.dp)) {
-                    if (!hasPhotos) {
-                        GroupBox("Prima di iniziare") {
-                            PixelCaption("Per raccogliere le foto del sopralluogo serve l'accesso alle foto: scegli \"Consenti tutto\".")
-                            Spacer(Modifier.height(8.dp))
-                            PushButton("Concedi l'accesso", { permLauncher.launch(photoPerms()) }, default = true)
-                        }
-                    }
+            if (!hasPhotos) Section("Prima di iniziare") {
+                Caption("Per raccogliere le foto del sopralluogo serve l'accesso alle foto: scegli \"Consenti tutto\".")
+                Spacer(Modifier.height(8.dp))
+                AppButton("Concedi l'accesso", { permLauncher.launch(photoPerms()) }, primary = true)
+            }
 
-                    if (active != null) {
-                        GroupBox("Sessione in corso") {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                StatusLight(true)
-                                Spacer(Modifier.width(10.dp))
-                                BigText(active.name)
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            PixelCaption(
-                                "Iniziata il ${dayTime.format(Date(active.start))} · $activeCount foto"
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            PushButton(
-                                "Apri la sessione",
-                                { ctx.startActivity(SessionActivity.intent(ctx, active.id)) },
-                                default = true,
-                            )
-                        }
-                    } else {
-                        GroupBox("Nuovo sopralluogo") {
-                            PixelCaption(
-                                "Inizia una sessione e scatta: le foto finiscono nella sessione, dove le annoti. " +
-                                    "Alla chiusura vengono salvate in una cartella dedicata."
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            PushButton("Inizia sopralluogo…", { askName = true }, default = true, enabled = hasPhotos)
-                        }
-                    }
+            if (active != null) Section("Sessione in corso") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusDot(true)
+                    Spacer(Modifier.width(8.dp))
+                    Text(active.name, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                }
+                Caption("Iniziata il ${dayTime.format(Date(active.start))} · $activeCount foto")
+                Spacer(Modifier.height(10.dp))
+                AppButton(
+                    "Apri la sessione", { ctx.startActivity(SessionActivity.intent(ctx, active.id)) },
+                    primary = true, modifier = Modifier.fillMaxWidth(),
+                )
+            } else Section("Nuovo sopralluogo") {
+                Caption(
+                    "Inizia una sessione e scatta: le foto finiscono nella sessione, dove le annoti. " +
+                        "Alla chiusura vengono salvate in una cartella dedicata."
+                )
+                Spacer(Modifier.height(10.dp))
+                AppButton(
+                    "Inizia sopralluogo…", { askName = true }, primary = true, enabled = hasPhotos,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
-                    GroupBox("Sopralluoghi salvati") {
-                        if (closed.isEmpty()) {
-                            PixelCaption("Ancora nessuno. I sopralluoghi chiusi compaiono qui.")
-                        } else {
-                            Column {
-                                closed.forEachIndexed { i, s ->
-                                    if (i > 0) ListDivider()
-                                    ListRow(s.folder, "${s.items.size} foto · ${dayOnly.format(Date(s.start))}") {
-                                        ctx.startActivity(SessionActivity.intent(ctx, s.id))
-                                    }
-                                }
-                            }
-                        }
+            Section("Sopralluoghi salvati") {
+                if (closed.isEmpty()) Caption("Ancora nessuno. I sopralluoghi chiusi compaiono qui.")
+                closed.forEachIndexed { i, s ->
+                    if (i > 0) ListDivider()
+                    ListRow(s.folder, "${s.items.size} foto · ${dayOnly.format(Date(s.start))}") {
+                        ctx.startActivity(SessionActivity.intent(ctx, s.id))
                     }
                 }
             }
@@ -191,20 +180,18 @@ private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
 
 // ------------------------------------------------------------------ impostazioni
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val t = tick.intValue
     BackHandler { onBack() }
-
-    val permLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { tick.intValue++ }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        tick.intValue++
+    }
 
     val hasPhotos = remember(t) { MediaHelper.hasPhotoPermission(ctx) }
-    val hasNotif = remember(t) {
-        Build.VERSION.SDK_INT < 33 || granted(ctx, Manifest.permission.POST_NOTIFICATIONS)
-    }
+    val hasNotif = remember(t) { Build.VERSION.SDK_INT < 33 || granted(ctx, Manifest.permission.POST_NOTIFICATIONS) }
     val hasGps = remember(t) { granted(ctx, Manifest.permission.ACCESS_MEDIA_LOCATION) }
     val hasOverlay = remember(t) { Settings.canDrawOverlays(ctx) }
     val noBatteryLimit = remember(t) {
@@ -217,22 +204,21 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
     }
 
     fun requestPerms() = permLauncher.launch(photoPerms())
-
+    fun open(action: String) = runCatching {
+        ctx.startActivity(Intent(action, Uri.parse("package:${ctx.packageName}")))
+    }
     fun openAppSettings() {
-        ctx.startActivity(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
-        )
+        open(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
     }
 
     fun toggleMonitoring() {
-        val on = !monitoring
-        if (on && !hasPhotos) {
+        if (!monitoring && !hasPhotos) {
             Toast.makeText(ctx, "Prima concedi l'accesso alle foto", Toast.LENGTH_SHORT).show()
             requestPerms(); return
         }
-        monitoring = on
-        Prefs.setMonitoring(ctx, on)
-        if (on) ServiceControl.start(ctx) else ServiceControl.stop(ctx)
+        monitoring = !monitoring
+        Prefs.setMonitoring(ctx, monitoring)
+        if (monitoring) ServiceControl.start(ctx) else ServiceControl.stop(ctx)
     }
 
     fun toggleAutoOpen() {
@@ -240,88 +226,94 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
         Prefs.setAutoOpen(ctx, autoOpen)
         if (autoOpen && !Settings.canDrawOverlays(ctx)) {
             Toast.makeText(ctx, "Attiva \"Comparsa sopra altre app\" per Pastashoot", Toast.LENGTH_LONG).show()
-            ctx.startActivity(
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
-            )
+            open(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
         }
     }
 
-    fun battery() {
-        try {
-            ctx.startActivity(
-                Intent(
-                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    Uri.parse("package:${ctx.packageName}")
-                )
-            )
-        } catch (e: Exception) {
-            openAppSettings()
-        }
-    }
-
-    DeskScreen {
+    AppScreen("Impostazioni", onBack = onBack) {
         Column(
             Modifier
-                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .windowPad(start = 10.dp, end = 13.dp, top = 14.dp, bottom = 16.dp)
+                .padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
         ) {
-            RetroWindow("Impostazioni", Modifier.fillMaxWidth(), onBack = onBack) {
-                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 16.dp)) {
-                    GroupBox("Aspetto") {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (row in SkinId.entries.chunked(3)) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    for (id in row) {
-                                        BevelButton(
-                                            null, height = 40.dp,
-                                            on = LocalSkin.current.id == id,
-                                            onClick = {
-                                                SkinStore.set(ctx, id)
-                                                // le barre di sistema cambiano stile con l'aspetto
-                                                (ctx as? android.app.Activity)?.recreate()
-                                            },
-                                        ) { BevelValue(id.label, size = 13) }
-                                    }
-                                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                                }
-                            }
-                        }
+            Section("Tema") {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    ThemeMode.entries.forEachIndexed { i, m ->
+                        SegmentedButton(
+                            selected = ThemeStore.mode == m,
+                            onClick = { ThemeStore.setMode(ctx, m) },
+                            shape = SegmentedButtonDefaults.itemShape(i, ThemeMode.entries.size),
+                        ) { Text(m.label) }
                     }
-
-                    GroupBox("Dopo lo scatto") {
-                        RetroCheckbox(monitoring, "Notifica per annotare subito", { toggleMonitoring() })
-                        RetroCheckbox(autoOpen, "Apri l'editor da solo", { toggleAutoOpen() })
-                        if (autoOpen && !hasOverlay) {
-                            PixelCaption("Manca il permesso \"Comparsa sopra altre app\": per ora arriva solo la notifica.")
-                        }
-                    }
-
-                    GroupBox("Permessi") {
-                        PermRow("Accesso alle foto", hasPhotos) { if (hasPhotos) openAppSettings() else requestPerms() }
-                        PermRow("Posizione GPS", hasGps) { if (hasGps) openAppSettings() else requestPerms() }
-                        PermRow("Notifiche", hasNotif) { if (hasNotif) openAppSettings() else requestPerms() }
-                        PermRow("Batteria libera", noBatteryLimit) { if (noBatteryLimit) openAppSettings() else battery() }
-                    }
-
-                    GroupBox("Foto singole, fuori sessione") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PushButton("Annota l'ultima foto", {
-                                val p = if (hasPhotos) MediaHelper.latestCameraPhoto(ctx.contentResolver) else null
-                                if (p == null) {
-                                    Toast.makeText(ctx, "Nessuna foto trovata in DCIM/Camera", Toast.LENGTH_SHORT).show()
-                                } else ctx.startActivity(EditorActivity.intent(ctx, p.uri))
-                            })
-                            PushButton("Nota multipla", { ctx.startActivity(BatchActivity.intent(ctx)) })
-                        }
-                    }
-
-                    PixelCaption(
-                        "Pastashoot $version. Per non perdere le notifiche, in Impostazioni › Batteria " +
-                            "aggiungi Pastashoot alle \"App mai in sospensione\".",
-                        Modifier.padding(top = 14.dp),
-                    )
                 }
+                Spacer(Modifier.height(12.dp))
+                Caption("Colore d'accento: ${ACCENTS[ThemeStore.accent].first}")
+                Spacer(Modifier.height(8.dp))
+                AccentPicker()
+            }
+
+            Section("Dopo lo scatto") {
+                SwitchRow("Notifica per annotare subito", monitoring, { toggleMonitoring() })
+                SwitchRow("Apri l'editor da solo", autoOpen, { toggleAutoOpen() })
+                if (autoOpen && !hasOverlay) {
+                    Caption("Manca il permesso \"Comparsa sopra altre app\": per ora arriva solo la notifica.")
+                }
+            }
+
+            Section("Permessi") {
+                PermRow("Accesso alle foto", hasPhotos) { if (hasPhotos) openAppSettings() else requestPerms() }
+                PermRow("Posizione GPS", hasGps) { if (hasGps) openAppSettings() else requestPerms() }
+                PermRow("Notifiche", hasNotif) { if (hasNotif) openAppSettings() else requestPerms() }
+                PermRow("Batteria libera", noBatteryLimit) {
+                    if (noBatteryLimit) openAppSettings()
+                    else open(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).onFailure { openAppSettings() }
+                }
+            }
+
+            Section("Foto singole, fuori sessione") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppButton("Annota l'ultima foto", {
+                        val p = if (hasPhotos) MediaHelper.latestCameraPhoto(ctx.contentResolver) else null
+                        if (p == null) Toast.makeText(ctx, "Nessuna foto trovata in DCIM/Camera", Toast.LENGTH_SHORT).show()
+                        else ctx.startActivity(EditorActivity.intent(ctx, p.uri))
+                    })
+                    AppButton("Nota multipla", { ctx.startActivity(BatchActivity.intent(ctx)) })
+                }
+            }
+
+            Caption(
+                "Pastashoot $version. Per non perdere le notifiche, in Impostazioni › Batteria " +
+                    "aggiungi Pastashoot alle \"App mai in sospensione\".",
+                Modifier.padding(top = 14.dp),
+            )
+        }
+    }
+}
+
+/** Pallini dei colori d'accento; il primo usa i colori del sistema (sfumato). */
+@Composable
+private fun AccentPicker() {
+    val ctx = LocalContext.current
+    val ring = MaterialTheme.colorScheme.onSurface
+    val systemFill = Brush.sweepGradient(
+        listOf(Color(0xFF6750A4), Color(0xFF2E7D4F), Color(0xFFD9661F), Color(0xFF6750A4))
+    )
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ACCENTS.forEachIndexed { i, (name, color) ->
+            if (color == null && !dynamicColorAvailable) return@forEachIndexed
+            val selected = ThemeStore.accent == i
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .border(if (selected) 3.dp else 0.dp, ring, CircleShape)
+                    .padding(if (selected) 5.dp else 0.dp)
+                    .clip(CircleShape)
+                    .then(if (color != null) Modifier.background(color) else Modifier.background(systemFill))
+                    .clickable { ThemeStore.setAccent(ctx, i) },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) Icon(AppIcons.Check, name, tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -329,13 +321,10 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
 
 @Composable
 private fun PermRow(label: String, ok: Boolean, onFix: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StatusLight(ok)
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        StatusDot(ok)
         Spacer(Modifier.width(10.dp))
-        Text(tx(label), fontFamily = Sys, fontSize = 15.sp, color = P.Ink, modifier = Modifier.weight(1f))
-        PushButton(if (ok) "Apri…" else "Concedi", onFix)
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        AppButton(if (ok) "Apri" else "Concedi", onFix, primary = !ok)
     }
 }

@@ -44,26 +44,13 @@ Gli aggiornamenti si installano sopra la versione precedente (la chiave di firma
 
 ## Struttura
 
-- `PhotoWatcherService` — servizio in primo piano che osserva le nuove foto
-- `EditorActivity` + `Ink.kt` — editor con S Pen, zoom, gomma, annulla
-- `AnnotationIO.kt` — salvataggio della copia annotata, EXIF, archivio delle annotazioni
-- `MainActivity` — impostazioni e permessi
-
-## Crediti
-
-Font: IBM Plex Mono, © IBM Corp., licenza SIL Open Font License 1.1 (vedi `FONT_LICENSE_OFL.txt`).
-
-## Skin
-
-Dalla schermata principale (riquadro "Aspetto") si sceglie tra tre stili, definiti in `Skin.kt`:
-
-- **Platinum** — grigi e rilievi da desktop di fine anni '90, scrivania azzurro-viola.
-- **Plan 9** — omaggio a rio/acme: grigio piatto, bordi viola-blu, tag azzurro pallido, testi su giallo pallido, minuscolo e monospazio.
-- **Sistema 7** — bianco e nero a 1 bit: scacchiera retinata, barre a righe nere, controlli che si invertono.
-
-- **BeOS** — scrivania blu, finestre grigie con la linguetta gialla del titolo, controlli attivi in giallo.
-
-Font aggiuntivo per i titoli di Sistema 7: Pixelify Sans Bold (SIL OFL 1.1).
+- `MainActivity` — home (sopralluoghi) e impostazioni
+- `SessionActivity` — sessione in corso (staging) e sopralluogo chiuso
+- `EditorActivity` + `Ink.kt` — editor con S Pen, testi, passaggio tra le foto
+- `LayoutEditor.kt` — layout dei campi di testo; `NoteBand.kt` — stampa dei testi nelle strisce
+- `Session.kt`, `AnnotationIO.kt`, `Export.kt` — dati, salvataggio, ZIP e PDF
+- `Theme.kt`, `Ui.kt`, `AppIcons.kt` — tema (chiaro/scuro/sistema, colore d'accento) e componenti Material 3
+- `PhotoWatcherService`, `BatchActivity` — notifica dopo lo scatto, nota multipla fuori sessione
 
 ## Sopralluoghi (sessioni)
 
@@ -94,5 +81,4 @@ abbandona senza salvare nulla.
 **Campi automatici** nel layout: data e ora dello scatto, nome del sopralluogo, etichetta fissa. Compaiono
 su tutte le foto della sessione senza doverli compilare.
 
-**Aspetto Android** (predefinito alla prima installazione): Material 3 con i colori di sistema (Material You)
-e il tema chiaro/scuro del telefono.
+**Tema**: chiaro, scuro o come il sistema; colore d'accento a scelta oppure quello di sistema (Material You).
