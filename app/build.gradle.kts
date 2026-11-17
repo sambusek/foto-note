@@ -19,24 +19,11 @@ android {
         versionName = "0.2.$buildNumber"
     }
 
-    // Chiave fissa e privata: così ogni nuovo APK si installa sopra il precedente.
-    // Non sta nel repository: la build di GitHub la riceve dai secret
-    // SIGNING_KEYSTORE_BASE64 e SIGNING_PASSWORD (vedi README, «Chiave di firma»).
-    signingConfigs {
-        create("release") {
-            System.getenv("SIGNING_KEYSTORE_PATH")?.let { path ->
-                storeFile = file(path)
-                storePassword = System.getenv("SIGNING_PASSWORD")
-                keyAlias = "pastashoot"
-                keyPassword = System.getenv("SIGNING_PASSWORD")
-            }
-        }
-    }
-
+    // La build release esce non firmata: la firma (con la chiave privata e la rotazione
+    // dalla vecchia chiave) la fa la build di GitHub con apksigner, vedi README, «Chiave di firma».
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
         }
     }
 

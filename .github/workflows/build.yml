@@ -27,29 +27,43 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Prepara la chiave di firma
+      - name: Prepara le chiavi di firma
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          OLD_KEYSTORE_BASE64: ${{ secrets.SIGNING_OLD_KEYSTORE_BASE64 }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$SIGNING_PASSWORD" ]; then
-            echo "::error::Mancano i secret SIGNING_KEYSTORE_BASE64 e/o SIGNING_PASSWORD (vedi README, «Chiave di firma»)"
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$OLD_KEYSTORE_BASE64" ] || [ -z "$SIGNING_PASSWORD" ]; then
+            echo "::error::Mancano i secret di firma (SIGNING_KEYSTORE_BASE64, SIGNING_OLD_KEYSTORE_BASE64, SIGNING_PASSWORD): vedi README, «Chiave di firma»"
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "$OLD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/old.keystore"
 
-      - name: Compila APK
-        env:
-          SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
-          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+      - name: Compila APK (non firmato)
         run: gradle assembleRelease -PversionCode=${{ github.run_number }} --stacktrace
 
-      - name: Rinomina APK
-        run: cp app/build/outputs/apk/release/app-release.apk pastashoot.apk
+      # Rotazione della chiave (APK Signature Scheme v3): l'APK porta la "discendenza"
+      # vecchia chiave → nuova, firmata dalla vecchia. Così si installa come aggiornamento
+      # sopra le versioni firmate con la vecchia chiave (senza perdere i dati) e, da lì in poi,
+      # il telefono rifiuta gli APK firmati solo con la vecchia chiave (che è pubblica).
+      - name: Firma APK con rotazione della chiave
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          OLD="--ks $RUNNER_TEMP/old.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android"
+          NEW="--ks $RUNNER_TEMP/release.keystore --ks-key-alias pastashoot --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD"
+          "$BT/apksigner" rotate --out "$RUNNER_TEMP/lineage" --old-signer $OLD --new-signer $NEW
+          "$BT/zipalign" -p -f 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --lineage "$RUNNER_TEMP/lineage" --rotation-min-sdk-version 28 \
+            $OLD --next-signer $NEW --out pastashoot.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify --verbose --print-certs pastashoot.apk
+          "$BT/apksigner" lineage --in pastashoot.apk --print-certs
 
-      - name: Elimina la chiave dal runner
+      - name: Elimina le chiavi dal runner
         if: always()
-        run: rm -f "$RUNNER_TEMP/release.keystore"
+        run: rm -f "$RUNNER_TEMP/release.keystore" "$RUNNER_TEMP/old.keystore" "$RUNNER_TEMP/lineage"
 
       - uses: actions/upload-artifact@v4
         with:
