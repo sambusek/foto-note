@@ -320,7 +320,7 @@ fun InkCanvas(
                         g.swipeX = ev.x; g.swipeY = ev.y
                         applyTransform(ev)
                     }
-                    Mode.NONE -> {}
+                    Mode.RESIZE, Mode.NONE -> {}
                 }
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
