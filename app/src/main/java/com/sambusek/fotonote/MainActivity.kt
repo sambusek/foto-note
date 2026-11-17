@@ -198,7 +198,8 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatusDot(true)
                     Spacer(Modifier.width(8.dp))
-                    Text(active.name, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                    Text(active.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+                    active.versionTag?.let { Tag(it) }
                 }
                 Caption("Iniziata il ${dayTime.format(Date(active.start))} · $activeCount foto")
                 Spacer(Modifier.height(10.dp))
@@ -222,7 +223,10 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                 if (closed.isEmpty()) Caption("Ancora nessuno. I sopralluoghi chiusi compaiono qui.")
                 closed.forEachIndexed { i, s ->
                     if (i > 0) ListDivider()
-                    ListRow(s.folder, "${s.items.size} foto · ${dayOnly.format(Date(s.start))}") {
+                    ListRow(
+                        s.folder, "${s.items.size} foto · ${dayOnly.format(Date(s.start))}",
+                        tags = listOfNotNull(s.versionTag?.let { it to false }, "Chiuso" to true),
+                    ) {
                         ctx.startActivity(SessionActivity.intent(ctx, s.id))
                     }
                 }

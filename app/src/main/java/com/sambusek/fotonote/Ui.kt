@@ -269,9 +269,26 @@ fun StatusDot(ok: Boolean) {
     Box(Modifier.size(10.dp).clip(CircleShape).background(if (ok) cs.primary else cs.error))
 }
 
-/** Riga di elenco toccabile, con freccia. */
+/** Etichetta breve di stato (es. "Chiuso", "V02"); [strong] = piena nel colore d'accento. */
 @Composable
-fun ListRow(title: String, subtitle: String?, onClick: () -> Unit) {
+fun Tag(text: String, strong: Boolean = false) {
+    val cs = MaterialTheme.colorScheme
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (strong) cs.onPrimary else cs.onSecondaryContainer,
+        maxLines = 1,
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (strong) cs.primary else cs.secondaryContainer)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
+}
+
+/** Riga di elenco toccabile, con eventuali etichette accanto al titolo e freccia. */
+@Composable
+fun ListRow(title: String, subtitle: String?, tags: List<Pair<String, Boolean>> = emptyList(), onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier
@@ -282,7 +299,13 @@ fun ListRow(title: String, subtitle: String?, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                for ((t, strong) in tags) Tag(t, strong)
+            }
             if (subtitle != null) Caption(subtitle)
         }
         Icon(AppIcons.Next, null, tint = cs.onSurfaceVariant)

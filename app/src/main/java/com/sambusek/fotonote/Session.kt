@@ -61,6 +61,9 @@ data class Session(
 ) {
     val open: Boolean get() = end == 0L
     val finalRelease: Release? get() = if (open) null else Release("Definitiva", folder, end, items)
+    /** Etichetta dell'ultima versione emessa, es. "V02"; null se non ce ne sono. */
+    val versionTag: String? get() = if (versions.isEmpty()) null else "V" + versions.size.toString().padStart(2, '0')
+
     /** Tutte le emissioni, la più recente per prima. */
     val releases: List<Release> get() = listOfNotNull(finalRelease) + versions.reversed()
 }
