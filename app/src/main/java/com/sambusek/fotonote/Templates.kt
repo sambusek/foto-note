@@ -156,6 +156,7 @@ fun TemplatesScreen(onBack: () -> Unit) {
     AppScreen(
         "Template",
         subtitle = "Schemi di campi pronti per i sopralluoghi",
+        maxWidth = ReadableWidth,
         onBack = onBack,
         actions = {
             ToolIcon(AppIcons.Add, "Nuovo template", { askName = true })

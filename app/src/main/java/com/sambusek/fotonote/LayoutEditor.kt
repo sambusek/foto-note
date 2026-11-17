@@ -78,6 +78,7 @@ fun LayoutScreen(
     )
 
     AppScreen(
+        maxWidth = ReadableWidth,
         title = title,
         subtitle = if (title != "Layout delle note") "Campi del template" else null,
         onBack = onCancel,

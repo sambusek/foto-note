@@ -11,6 +11,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -137,7 +140,7 @@ private val dayOnly = SimpleDateFormat("dd/MM/yyyy", Locale.ITALY)
 @Composable
 private fun WelcomeScreen(onDone: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
-    AppScreen("Benvenuto") {
+    AppScreen("Benvenuto", maxWidth = ReadableWidth) {
         Column(Modifier.padding(horizontal = 16.dp)) {
             Text("Come ti chiami?", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
             Caption(
@@ -226,11 +229,8 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
             } else ToolIcon(AppIcons.Tune, "Impostazioni", onSettings)
         },
     ) {
-        Column(
-            Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
-        ) {
+        // in alto saluto e sessione; sotto (o a destra, su schermi larghi) i sopralluoghi salvati
+        val top: @Composable ColumnScope.() -> Unit = {
             Text(
                 "Ciao, $user!", style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 2.dp, top = 4.dp),
@@ -267,6 +267,8 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                 )
             }
 
+        }
+        val saved: @Composable ColumnScope.() -> Unit = {
             Section("Sopralluoghi salvati") {
                 if (closed.isEmpty()) Caption("Ancora nessuno. I sopralluoghi chiusi compaiono qui.")
                 else if (!selecting) Caption("Tieni premuto un sopralluogo per selezionarne più di uno.")
@@ -282,6 +284,16 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                         if (selecting) toggle(s.id) else ctx.startActivity(SessionActivity.intent(ctx, s.id))
                     }
                 }
+            }
+        }
+        val scroll = Modifier.verticalScroll(rememberScrollState())
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            if (maxWidth >= 720.dp) Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), content = top)
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), content = saved)
+            } else Column(scroll.padding(start = 12.dp, end = 12.dp, bottom = 16.dp)) {
+                top()
+                saved()
             }
         }
     }
@@ -389,7 +401,7 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
         }
     }
 
-    AppScreen("Impostazioni", onBack = onBack) {
+    AppScreen("Impostazioni", onBack = onBack, maxWidth = ReadableWidth) {
         Column(
             Modifier
                 .verticalScroll(rememberScrollState())
@@ -450,7 +462,7 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AppButton("Annota l'ultima foto", {
                         val p = if (hasPhotos) MediaHelper.latestCameraPhoto(ctx.contentResolver) else null
-                        if (p == null) Toast.makeText(ctx, "Nessuna foto trovata in DCIM/Camera", Toast.LENGTH_SHORT).show()
+                        if (p == null) Toast.makeText(ctx, "Nessuna foto della fotocamera trovata", Toast.LENGTH_SHORT).show()
                         else ctx.startActivity(EditorActivity.intent(ctx, p.uri))
                     })
                     AppButton("Nota multipla", { ctx.startActivity(BatchActivity.intent(ctx)) })

@@ -14,7 +14,12 @@ data class Photo(val id: Long, val uri: Uri, val dateAddedSec: Long)
 
 object MediaHelper {
     /** Cartella in cui la Fotocamera Samsung salva gli scatti. */
-    private const val CAMERA_PATH = "DCIM/Camera/"
+    /**
+     * Foto della fotocamera: qualsiasi cartella sotto DCIM (Camera, OpenCamera, ecc.),
+     * tranne gli screenshot che alcuni telefoni salvano in DCIM/Screenshots.
+     */
+    private val CAMERA_SEL =
+        "(${MediaStore.Images.Media.RELATIVE_PATH} LIKE 'DCIM/%' AND ${MediaStore.Images.Media.RELATIVE_PATH} NOT LIKE '%Screenshot%')"
 
     private val collection: Uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
@@ -26,14 +31,14 @@ object MediaHelper {
 
     fun latestCameraPhoto(cr: ContentResolver, sinceSec: Long = 0): Photo? = query(
         cr,
-        "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ? AND ${MediaStore.Images.Media.DATE_ADDED} >= ?",
-        arrayOf("$CAMERA_PATH%", sinceSec.toString())
+        "$CAMERA_SEL AND ${MediaStore.Images.Media.DATE_ADDED} >= ?",
+        arrayOf(sinceSec.toString())
     )
 
     fun cameraPhotoById(cr: ContentResolver, id: Long): Photo? = query(
         cr,
-        "${MediaStore.Images.Media._ID} = ? AND ${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?",
-        arrayOf(id.toString(), "$CAMERA_PATH%")
+        "${MediaStore.Images.Media._ID} = ? AND $CAMERA_SEL",
+        arrayOf(id.toString())
     )
 
     private fun query(cr: ContentResolver, selection: String, args: Array<String>): Photo? {
@@ -55,8 +60,8 @@ object MediaHelper {
     /** Foto della fotocamera aggiunte in un intervallo di tempo (secondi), in ordine di scatto. */
     fun cameraPhotosBetween(cr: ContentResolver, startSec: Long, endSec: Long?): List<Photo> {
         val out = ArrayList<Photo>()
-        var sel = "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ? AND ${MediaStore.Images.Media.DATE_ADDED} >= ?"
-        val args = arrayListOf("$CAMERA_PATH%", startSec.toString())
+        var sel = "$CAMERA_SEL AND ${MediaStore.Images.Media.DATE_ADDED} >= ?"
+        val args = arrayListOf(startSec.toString())
         if (endSec != null) {
             sel += " AND ${MediaStore.Images.Media.DATE_ADDED} <= ?"
             args += endSec.toString()
@@ -81,8 +86,8 @@ object MediaHelper {
     /** Tutte le foto (o solo quelle della fotocamera), più recenti prima. */
     fun allPhotos(cr: ContentResolver, onlyCamera: Boolean): List<Uri> {
         val out = ArrayList<Uri>()
-        val sel = if (onlyCamera) "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?" else null
-        val args = if (onlyCamera) arrayOf("$CAMERA_PATH%") else null
+        val sel = if (onlyCamera) CAMERA_SEL else null
+        val args: Array<String>? = null
         try {
             cr.query(
                 collection, arrayOf(MediaStore.Images.Media._ID), sel, args,

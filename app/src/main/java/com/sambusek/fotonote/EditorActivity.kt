@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -303,60 +305,65 @@ private fun EditorScreen(
             }
         },
     ) {
-        // foto e disegno
-        Box(
-            Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHighest),
-            contentAlignment = Alignment.Center,
-        ) {
-            val bmp = bitmap
-            when {
-                error != null -> CenterMessage(error!!)
-                bmp == null -> CenterMessage("Apertura in corso…")
-                else -> {
-                    val image = remember(bmp) { bmp.asImageBitmap() }
-                    // anteprima dei testi, come verranno stampati
-                    val pad = ink.pad
-                    val overlay = remember(note, vals, bmp, takenMillis, pad) {
-                        Overlay.create(
-                            note, fields, AutoFields.resolve(fields, vals, session?.name.orEmpty(), takenMillis, Prefs.userName(ctx)),
-                            bmp.width + pad.l.roundToInt() + pad.r.roundToInt(),
-                            bmp.height + pad.t.roundToInt() + pad.b.roundToInt(),
-                        )
+        // su schermi larghi in orizzontale (tablet) i testi stanno a destra della foto
+        val conf = LocalConfiguration.current
+        val side = conf.screenWidthDp >= 720 && conf.screenWidthDp > conf.screenHeightDp
+        val photoView: @Composable (Modifier) -> Unit = { photoModifier ->
+            Box(
+                photoModifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center,
+            ) {
+                val bmp = bitmap
+                when {
+                    error != null -> CenterMessage(error!!)
+                    bmp == null -> CenterMessage("Apertura in corso…")
+                    else -> {
+                        val image = remember(bmp) { bmp.asImageBitmap() }
+                        // anteprima dei testi, come verranno stampati
+                        val pad = ink.pad
+                        val overlay = remember(note, vals, bmp, takenMillis, pad) {
+                            Overlay.create(
+                                note, fields, AutoFields.resolve(fields, vals, session?.name.orEmpty(), takenMillis, Prefs.userName(ctx)),
+                                bmp.width + pad.l.roundToInt() + pad.r.roundToInt(),
+                                bmp.height + pad.t.roundToInt() + pad.b.roundToInt(),
+                            )
+                        }
+                        InkCanvas(image, ink, stylusOnly, overlay, canvasMode = canvasMode, onSwipe = if (canvasMode) null else ::go)
                     }
-                    InkCanvas(image, ink, stylusOnly, overlay, canvasMode = canvasMode, onSwipe = if (canvasMode) null else ::go)
+                }
+                if (saving) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+            }
+        }
+        val textsView: @Composable (Modifier) -> Unit = { textsModifier ->
+            // testi: campi del layout di sessione e nota libera
+            if (textsOpen) Column(
+                textsModifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for (f in inputFields) Row(verticalAlignment = Alignment.CenterVertically) {
+                    FieldLabel(f.label)
+                    ChoiceField(
+                        values[f.id].orEmpty(), { values[f.id] = it }, f.pos.short,
+                        if (f.kind == FieldKind.CHOICE) f.options else emptyList(),
+                    )
+                }
+                Row {
+                    FieldLabel("Nota", Modifier.padding(top = 10.dp))
+                    CompactField(note, { note = it }, "Scrivi o detta una nota…", singleLine = false, maxHeight = 110.dp)
                 }
             }
-            if (saving) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
         }
-
-        // testi: campi del layout di sessione e nota libera
-        if (textsOpen) Column(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 180.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            for (f in inputFields) Row(verticalAlignment = Alignment.CenterVertically) {
-                FieldLabel(f.label)
-                ChoiceField(
-                    values[f.id].orEmpty(), { values[f.id] = it }, f.pos.short,
-                    if (f.kind == FieldKind.CHOICE) f.options else emptyList(),
-                )
-            }
-            Row {
-                FieldLabel("Nota", Modifier.padding(top = 10.dp))
-                CompactField(note, { note = it }, "Scrivi o detta una nota…", singleLine = false, maxHeight = 110.dp)
-            }
+        if (side) Row(Modifier.weight(1f).fillMaxWidth()) {
+            photoView(Modifier.weight(1f).fillMaxHeight())
+            textsView(Modifier.width(340.dp).fillMaxHeight())
+        } else {
+            photoView(Modifier.weight(1f).fillMaxWidth())
+            textsView(Modifier.fillMaxWidth().heightIn(max = 180.dp))
         }
     }
 }
-
-/** Pulsante per passare alla foto precedente o successiva: pieno nel colore d'accento. */
-@Composable
-private fun NavButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean) =
-    FilledIconButton(onClick, Modifier.size(44.dp), enabled = enabled, shape = RoundedCornerShape(6.dp)) { Icon(icon, description) }
 
 @Composable
 private fun FieldLabel(text: String, modifier: Modifier = Modifier) = Text(

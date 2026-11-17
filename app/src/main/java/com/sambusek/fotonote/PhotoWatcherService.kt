@@ -16,7 +16,7 @@ import androidx.core.app.ServiceCompat
 
 /**
  * Servizio sempre attivo che osserva la galleria: quando la Fotocamera
- * salva una nuova foto in DCIM/Camera, propone di annotarla.
+ * salva una nuova foto (in DCIM), propone di annotarla.
  */
 class PhotoWatcherService : Service() {
 

@@ -3,6 +3,10 @@ package com.sambusek.fotonote
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -86,8 +90,11 @@ fun AppScreen(
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: (@Composable () -> Unit)? = null,
     brand: Boolean = true,
+    maxWidth: Dp = Dp.Unspecified,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // su tablet le schermate di testo restano di larghezza leggibile, centrate
+    val narrow = Modifier.fillMaxWidth().then(if (maxWidth != Dp.Unspecified) Modifier.widthIn(max = maxWidth) else Modifier)
     val cs = MaterialTheme.colorScheme
     // Surface fornisce sfondo e colore del contenuto (testi e icone) giusti per il tema chiaro o scuro
     Surface(Modifier.fillMaxSize(), color = cs.surface, contentColor = cs.onSurface) {
@@ -116,8 +123,12 @@ fun AppScreen(
             }
             Row(verticalAlignment = Alignment.CenterVertically, content = actions)
         }
-        Column(Modifier.weight(1f).fillMaxWidth(), content = content)
-        bottomBar?.invoke()
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(narrow.fillMaxHeight(), content = content)
+        }
+        if (bottomBar != null) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(narrow) { bottomBar() }
+        }
     }
     }
 }
@@ -497,6 +508,12 @@ fun Modifier.selectedOverlay(selected: Boolean): Modifier =
 
 /** Spazio tra le miniature delle griglie. */
 val GridGap = 2.dp
+
+/** Larghezza massima delle schermate di testo (impostazioni, elenchi, moduli). */
+val ReadableWidth = 720.dp
+
+/** Lato minimo delle miniature: più grandi sugli schermi larghi. */
+val ThumbSize: Dp @Composable get() = if (LocalConfiguration.current.screenWidthDp >= 600) 132.dp else 92.dp
 
 /** Campo compatto con, se ci sono [options], un menu a tendina per sceglierne una (si può anche scrivere). */
 @Composable

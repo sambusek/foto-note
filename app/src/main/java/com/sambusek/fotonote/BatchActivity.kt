@@ -135,6 +135,7 @@ private fun BatchScreen(initial: List<Uri>, onClose: () -> Unit) {
     }
 
     AppScreen(
+        maxWidth = ReadableWidth,
         title = "Nota multipla",
         subtitle = "${uris.size} foto",
         onBack = { if (!running) onClose() },
@@ -186,7 +187,7 @@ fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCancel: () 
             SwitchRow("Solo foto della fotocamera", onlyCamera, { onlyCamera = !onlyCamera })
         }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(92.dp),
+            columns = GridCells.Adaptive(ThumbSize),
             contentPadding = PaddingValues(GridGap),
             horizontalArrangement = Arrangement.spacedBy(GridGap),
             verticalArrangement = Arrangement.spacedBy(GridGap),

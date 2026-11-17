@@ -334,7 +334,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
             return@AppScreen
         }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(92.dp),
+            columns = GridCells.Adaptive(ThumbSize),
             contentPadding = PaddingValues(GridGap),
             horizontalArrangement = Arrangement.spacedBy(GridGap),
             verticalArrangement = Arrangement.spacedBy(GridGap),
@@ -459,7 +459,7 @@ private fun ClosedScreen(s: Session, onClose: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         )
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(92.dp),
+            columns = GridCells.Adaptive(ThumbSize),
             contentPadding = PaddingValues(GridGap),
             horizontalArrangement = Arrangement.spacedBy(GridGap),
             verticalArrangement = Arrangement.spacedBy(GridGap),
@@ -480,7 +480,7 @@ private fun ClosedScreen(s: Session, onClose: () -> Unit) {
 private fun ReleasesScreen(s: Session, onBack: () -> Unit) {
     BackHandler { onBack() }
     val export = rememberExport(s)
-    AppScreen("Versioni emesse", subtitle = s.name, onBack = onBack) {
+    AppScreen("Versioni emesse", subtitle = s.name, onBack = onBack, maxWidth = ReadableWidth) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 16.dp)) {
             if (s.releases.isEmpty()) CenterMessage("Nessuna versione emessa.", Modifier.fillMaxWidth())
             s.releases.forEachIndexed { i, r ->
