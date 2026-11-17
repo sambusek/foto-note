@@ -1,5 +1,7 @@
 package com.sambusek.fotonote
 
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -163,7 +165,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
             preselected = s.extra.map(Uri::parse),
             onDone = { sel ->
                 val keys = sel.map { it.toString() }
-                SessionStore.save(ctx, s.copy(extra = keys, excluded = s.excluded - keys.toSet()))
+                SessionStore.save(ctx, s.copy(extra = keys, excluded = s.excluded - keys.toSet(), removed = s.removed - keys.toSet()))
                 picking = false
                 refresh()
             },
@@ -350,6 +352,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                 val key = p.uri.toString()
                 val excluded = key in s.excluded
                 val isSelected = key in selected
+                var menu by remember { mutableStateOf(false) }
                 Box(
                     Modifier
                         .aspectRatio(1f)
@@ -357,26 +360,44 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                             onClick = {
                                 when {
                                     excluded -> Toast.makeText(
-                                        ctx, "Foto esclusa: tienila premuta per riammetterla", Toast.LENGTH_SHORT
+                                        ctx, "Foto esclusa dalle versioni: tienila premuta per riammetterla", Toast.LENGTH_SHORT
                                     ).show()
                                     selecting -> if (isSelected) selected.remove(key) else selected.add(key)
                                     else -> ctx.startActivity(EditorActivity.intent(ctx, p.uri))
                                 }
                             },
-                            onLongClick = {
-                                if (selecting) return@combinedClickable
-                                // una foto aggiunta a mano si toglie; una scattata in sessione si esclude o riammette
-                                SessionStore.save(
-                                    ctx, when {
-                                        key in s.extra -> s.copy(extra = s.extra - key)
-                                        excluded -> s.copy(excluded = s.excluded - key)
-                                        else -> s.copy(excluded = s.excluded + key)
-                                    }
-                                )
+                            onLongClick = { if (!selecting) menu = true },
+                        )
+                ) {
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        // esclusa: resta nel sopralluogo ma non entra nelle versioni
+                        DropdownMenuItem(
+                            text = { Text(if (excluded) "Riammetti nelle versioni" else "Escludi dalle versioni") },
+                            onClick = {
+                                menu = false
+                                SessionStore.save(ctx, s.copy(excluded = if (excluded) s.excluded - key else s.excluded + key))
                                 refresh()
                             },
                         )
-                ) {
+                        // tolta: sparisce dal sopralluogo, ma resta nella Galleria
+                        DropdownMenuItem(
+                            text = { Text("Togli dal sopralluogo") },
+                            onClick = {
+                                menu = false
+                                SessionStore.save(
+                                    ctx,
+                                    if (key in s.extra) s.copy(extra = s.extra - key, excluded = s.excluded - key)
+                                    else s.copy(removed = s.removed + key, excluded = s.excluded - key),
+                                )
+                                selected.remove(key)
+                                refresh()
+                                Toast.makeText(
+                                    ctx, "Foto tolta dal sopralluogo: resta nella Galleria. Per riaverla: Aggiungi foto già scattate",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            },
+                        )
+                    }
                     PhotoThumb(p.uri, Modifier.fillMaxSize())
                     when {
                         excluded -> Box(

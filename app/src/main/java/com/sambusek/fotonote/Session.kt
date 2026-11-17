@@ -54,6 +54,8 @@ data class Session(
     val excluded: Set<String> = emptySet(),
     /** Foto scattate prima della sessione e aggiunte a mano. */
     val extra: List<String> = emptyList(),
+    /** Foto scattate durante la sessione ma tolte dal sopralluogo (restano nella Galleria). */
+    val removed: Set<String> = emptySet(),
     /** Layout delle note: i campi da compilare su ogni foto e dove stamparli. */
     val fields: List<NoteField> = emptyList(),
     /** Foto del consolidamento definitivo. */
@@ -127,6 +129,7 @@ internal fun Session.toJson(): JSONObject {
         .put("start", start).put("end", end)
         .put("excluded", JSONArray(excluded.toList()))
         .put("extra", JSONArray(extra))
+        .put("removed", JSONArray(removed.toList()))
         .put("fields", fl)
         .put("items", items.toJson())
         .put("versions", vs)
@@ -146,6 +149,7 @@ internal fun sessionFromJson(o: JSONObject): Session {
         end = o.optLong("end", 0L),
         excluded = o.optJSONArray("excluded").strings().toSet(),
         extra = o.optJSONArray("extra").strings(),
+        removed = o.optJSONArray("removed").strings().toSet(),
         fields = if (fl == null) emptyList() else (0 until fl.length()).map { fieldFromJson(fl.getJSONObject(it)) },
         items = itemsFromJson(o.optJSONArray("items")),
         versions = if (vs == null) emptyList() else (0 until vs.length()).map {
@@ -238,7 +242,7 @@ object SessionStore {
     fun photos(c: Context, s: Session): List<Photo> {
         if (!MediaHelper.hasPhotoPermission(c)) return emptyList()
         val shot = MediaHelper.cameraPhotosBetween(c.contentResolver, s.start / 1000, if (s.open) null else s.end / 1000)
-            .filter { !s.inPause(it.dateAddedSec * 1000) }
+            .filter { !s.inPause(it.dateAddedSec * 1000) && it.uri.toString() !in s.removed }
         val shotKeys = shot.map { it.uri.toString() }.toSet()
         val wanted = s.extra.distinct().filter { it !in shotKeys }.mapNotNull { u ->
             val uri = Uri.parse(u)
@@ -255,6 +259,7 @@ object SessionStore {
         if (uri.authority != MediaStore.AUTHORITY) return null
         val s = active(c) ?: return null
         if (uri.toString() in s.extra) return s
+        if (uri.toString() in s.removed) return null
         val id = runCatching { ContentUris.parseId(uri) }.getOrNull() ?: return null
         val p = MediaHelper.cameraPhotoById(c.contentResolver, id) ?: return null
         return if (p.dateAddedSec >= s.start / 1000 && !s.inPause(p.dateAddedSec * 1000)) s else null

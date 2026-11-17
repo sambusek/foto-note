@@ -18,7 +18,7 @@ Un sopralluogo raccoglie da solo tutte le foto scattate con la fotocamera del te
 1. Nella Home tocca **Inizia sopralluogo…**, scrivi il nome (diventerà il nome della cartella) e, se vuoi, scegli un template.
 2. Scatta con la fotocamera di sempre, o dal pulsante **Fotocamera** nella schermata del sopralluogo. Le foto compaiono nella griglia.
 3. Se ti servono foto fatte prima, usa ⋮ › **Aggiungi foto già scattate…**.
-4. Per escludere una foto finita dentro per sbaglio, tienila premuta. Tienila premuta di nuovo per riammetterla.
+4. Tieni premuta una foto per due scelte: **Escludi dalle versioni** la lascia nel sopralluogo ma fuori da versioni e consolidamento; **Togli dal sopralluogo** la fa sparire dalla griglia, ma resta nella Galleria del telefono. Per riaverla usa **Aggiungi foto già scattate…**.
 5. Per una pausa (pranzo, foto personali) tocca **Metti in pausa**: gli scatti fatti in pausa restano fuori. Riprendi quando torni in cantiere.
 
 Puoi avere un solo sopralluogo in corso alla volta. Lo ritrovi nella Home sotto «Sessione in corso».
