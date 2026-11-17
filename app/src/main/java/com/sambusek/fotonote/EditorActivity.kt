@@ -7,6 +7,10 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledIconButton
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -249,7 +253,7 @@ private fun EditorScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (canNav) ToolIcon(AppIcons.Prev, "Foto precedente", { go(-1) }, enabled = index > 0)
+                if (canNav) NavButton(AppIcons.Prev, "Foto precedente", { go(-1) }, enabled = index > 0)
                 Box {
                     IconButton({ colorMenu = true }) { Swatch(ink.color, size = 22) }
                     DropdownMenu(expanded = colorMenu, onDismissRequest = { colorMenu = false }) {
@@ -274,7 +278,7 @@ private fun EditorScreen(
                 )
                 ToolIcon(AppIcons.Notes, "Testi", { textsOpen = !textsOpen }, selected = textsOpen)
                 ToolIcon(AppIcons.Delete, "Cancella i tratti", { ink.clearAll() }, enabled = ink.strokes.isNotEmpty())
-                if (canNav) ToolIcon(AppIcons.Next, "Foto successiva", { go(1) }, enabled = index < total - 1)
+                if (canNav) NavButton(AppIcons.Next, "Foto successiva", { go(1) }, enabled = index < total - 1)
             }
         },
     ) {
@@ -325,6 +329,11 @@ private fun EditorScreen(
         }
     }
 }
+
+/** Pulsante per passare alla foto precedente o successiva: pieno nel colore d'accento. */
+@Composable
+private fun NavButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean) =
+    FilledIconButton(onClick, enabled = enabled, shape = RoundedCornerShape(6.dp)) { Icon(icon, description) }
 
 @Composable
 private fun FieldLabel(text: String, modifier: Modifier = Modifier) = Text(

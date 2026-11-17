@@ -296,6 +296,7 @@ fun ListRow(
     title: String,
     subtitle: String?,
     tags: List<Pair<String, Boolean>> = emptyList(),
+    locked: Boolean = false,
     selected: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
@@ -318,6 +319,10 @@ fun ListRow(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 for ((t, strong) in tags) Tag(t, strong)
+                if (locked) Icon(
+                    AppIcons.Lock, "Chiuso", tint = cs.primary,
+                    modifier = Modifier.padding(start = 6.dp).size(16.dp),
+                )
             }
             if (subtitle != null) Caption(subtitle)
         }

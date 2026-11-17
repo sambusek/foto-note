@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.IconButton
@@ -418,6 +420,24 @@ private fun ClosedScreen(s: Session, onClose: () -> Unit) {
             }
         },
     ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(AppIcons.Lock, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
+            Text(
+                "Questo sopralluogo risulta chiuso e consolidato nella propria versione finale, quindi non è " +
+                    "possibile modificare disegni e annotazioni.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(start = 10.dp),
+            )
+        }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(92.dp),
             contentPadding = PaddingValues(GridGap),

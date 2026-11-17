@@ -273,7 +273,8 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                     if (i > 0) ListDivider()
                     ListRow(
                         s.folder, "${s.items.size} foto · ${dayOnly.format(Date(s.start))}",
-                        tags = listOfNotNull(s.versionTag?.let { it to false }, "Chiuso" to true),
+                        tags = listOfNotNull(s.versionTag?.let { it to false }),
+                        locked = true,
                         selected = s.id in selected,
                         onLongClick = { toggle(s.id) },
                     ) {
