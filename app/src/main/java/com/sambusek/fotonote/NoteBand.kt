@@ -18,13 +18,22 @@ enum class FieldPos(val label: String, val short: String) {
     BR("Angolo inferiore destro", "Ang. inf. dx"),
 }
 
-/** Tipo di campo: da compilare foto per foto, oppure automatico (uguale o calcolato per ogni foto). */
-enum class FieldKind(val label: String, val defaultLabel: String, val defaultPos: FieldPos) {
-    INPUT("Campo da compilare", "", FieldPos.BOTTOM),
-    DATE("Data dello scatto", "Data", FieldPos.TL),
-    TIME("Ora dello scatto", "Ora", FieldPos.TL),
-    SESSION("Nome del sopralluogo", "Sopralluogo", FieldPos.TOP),
-    FIXED("Etichetta fissa", "Etichetta", FieldPos.TR),
+/** Tipo di campo: da compilare foto per foto (testo libero o elenco) oppure automatico. */
+enum class FieldKind(
+    val label: String,
+    val description: String,
+    val defaultLabel: String,
+    val defaultPos: FieldPos,
+) {
+    INPUT("Testo libero", "Lo scrivi tu, foto per foto", "", FieldPos.BOTTOM),
+    CHOICE("Elenco di scelte", "Su ogni foto scegli una voce dall'elenco che definisci qui", "", FieldPos.BOTTOM),
+    DATE("Data dello scatto", "Automatico: la data della foto", "Data", FieldPos.TL),
+    TIME("Ora dello scatto", "Automatico: l'ora della foto", "Ora", FieldPos.TL),
+    SESSION("Nome del sopralluogo", "Automatico: il nome di questa sessione", "Sopralluogo", FieldPos.TOP),
+    FIXED("Etichetta fissa", "Automatico: lo stesso testo su tutte le foto", "Etichetta", FieldPos.TR);
+
+    /** Vero per i campi che si compilano da soli su tutte le foto. */
+    val auto: Boolean get() = this != INPUT && this != CHOICE
 }
 
 /**
@@ -39,10 +48,10 @@ data class NoteField(
     val showLabel: Boolean = true,
     val kind: FieldKind = FieldKind.INPUT,
     val text: String = "",
-    /** Elenco di scelte, scritto separato da virgole (es. "P3, P4"); vuoto = testo libero. */
+    /** Voci di un campo [FieldKind.CHOICE], scritte separate da virgole (es. "P3, P4"). */
     val choices: String = "",
 ) {
-    val auto: Boolean get() = kind != FieldKind.INPUT
+    val auto: Boolean get() = kind.auto
     val options: List<String> get() = choices.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 }
 
@@ -55,7 +64,7 @@ object AutoFields {
         val out = values.toMutableMap()
         val date = java.util.Date(takenMillis)
         for (f in fields) when (f.kind) {
-            FieldKind.INPUT -> {}
+            FieldKind.INPUT, FieldKind.CHOICE -> {}
             FieldKind.DATE -> out[f.id] = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ITALY).format(date)
             FieldKind.TIME -> out[f.id] = java.text.SimpleDateFormat("HH:mm", java.util.Locale.ITALY).format(date)
             FieldKind.SESSION -> out[f.id] = sessionName

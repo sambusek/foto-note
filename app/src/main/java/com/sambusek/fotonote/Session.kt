@@ -63,14 +63,15 @@ object SessionStore {
             end = o.optLong("end", 0L),
             excluded = (0 until ex.length()).map { i -> ex.getString(i) }.toSet(),
             extra = (0 until xt.length()).map { i -> xt.getString(i) },
-            fields = (0 until fl.length()).mapNotNull { i ->
+            fields = (0 until fl.length()).map { i ->
                 val x = fl.getJSONObject(i)
                 val pos = FieldPos.entries.firstOrNull { p -> p.name == x.optString("pos") } ?: FieldPos.BOTTOM
+                val choices = x.optString("choices", "")
+                var kind = FieldKind.entries.firstOrNull { k -> k.name == x.optString("kind") } ?: FieldKind.INPUT
+                if (kind == FieldKind.INPUT && choices.isNotBlank()) kind = FieldKind.CHOICE // versioni precedenti
                 NoteField(
                     x.getString("id"), x.getString("label"), pos, x.optBoolean("showLabel", true),
-                    FieldKind.entries.firstOrNull { k -> k.name == x.optString("kind") } ?: FieldKind.INPUT,
-                    x.optString("text", ""),
-                    x.optString("choices", ""),
+                    kind, x.optString("text", ""), choices,
                 )
             },
             items = (0 until it.length()).map { i ->
@@ -131,11 +132,8 @@ object SessionStore {
         var folder = base
         var n = 2
         while (folder in used) folder = "${base}_${n++}"
-        // il nuovo sopralluogo parte dal layout delle note dell'ultimo
-        val s = Session(
-            id = start.toString(), name = name.trim(), folder = folder, start = start,
-            fields = previous.firstOrNull()?.fields ?: emptyList(),
-        )
+        // ogni sopralluogo parte senza campi; lo schema si può copiare da uno precedente
+        val s = Session(id = start.toString(), name = name.trim(), folder = folder, start = start)
         save(c, s)
         return s
     }

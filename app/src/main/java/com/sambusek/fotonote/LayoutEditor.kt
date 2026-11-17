@@ -1,6 +1,8 @@
 package com.sambusek.fotonote
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -44,7 +46,12 @@ import androidx.compose.ui.unit.sp
 
 /** Editor del layout delle note di una sessione: campi con nome, tipo e posizione. */
 @Composable
-fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, onCancel: () -> Unit) {
+fun LayoutScreen(
+    initial: List<NoteField>,
+    templates: List<Session>,
+    onDone: (List<NoteField>) -> Unit,
+    onCancel: () -> Unit,
+) {
     val fields = remember { mutableStateListOf<NoteField>().apply { addAll(initial) } }
     BackHandler { onCancel() }
 
@@ -69,9 +76,16 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
                 "I testi stanno in due strisce aggiunte sopra e sotto la foto, mai sopra la foto. " +
                     "I campi automatici (*) compaiono da soli su tutte le foto."
             )
+            if (templates.isNotEmpty()) CopyFromButton(templates) { src ->
+                fields.clear()
+                fields += src.fields
+            }
             Section("Schema") { LayoutPreview(fields) }
             Section("Campi") {
-                if (fields.isEmpty()) Caption("Nessun campo: sulle foto ci sarà solo la nota, nella banda inferiore.")
+                if (fields.isEmpty()) Caption(
+                    "Nessun campo: sulle foto ci sarà solo la nota, nella banda inferiore. " +
+                        "Aggiungi un campo o copia lo schema di un sopralluogo precedente."
+                )
                 fields.forEachIndexed { i, f ->
                     key(f.id) {
                         if (i > 0) ListDivider()
@@ -82,7 +96,7 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
                 AddFieldButton { kind ->
                     fields += NoteField(
                         System.nanoTime().toString(), kind.defaultLabel, kind.defaultPos,
-                        showLabel = kind == FieldKind.INPUT, kind = kind,
+                        showLabel = !kind.auto, kind = kind,
                     )
                 }
             }
@@ -92,43 +106,92 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
 
 @Composable
 private fun FieldEditor(f: NoteField, onChange: (NoteField) -> Unit, onRemove: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Caption(
-            when {
-                f.auto -> "${f.kind.label} · automatico"
-                f.options.isNotEmpty() -> "Campo con elenco di scelte · si può anche scrivere"
-                else -> f.kind.label
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // tipo del campo, sempre visibile e modificabile
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            KindPicker(f.kind, Modifier.weight(1f)) { k ->
+                onChange(f.copy(kind = k, label = f.label.ifBlank { k.defaultLabel }, showLabel = !k.auto))
             }
-        )
-        Row(
-            Modifier.fillMaxWidth().padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            CompactField(f.label, { onChange(f.copy(label = it)) }, if (f.auto) "Etichetta" else "es. Piano", Modifier.weight(1f))
-            PositionPicker(f.pos) { onChange(f.copy(pos = it)) }
             ToolIcon(AppIcons.Delete, "Elimina campo", onRemove)
         }
-        if (f.kind == FieldKind.FIXED) CompactField(
-            f.text, { onChange(f.copy(text = it)) }, "Testo stampato su ogni foto", Modifier.padding(top = 4.dp),
-        )
-        if (f.kind == FieldKind.INPUT) CompactField(
-            f.choices, { onChange(f.copy(choices = it)) }, "Elenco di scelte, es. P3, P4 (facoltativo)",
-            Modifier.padding(top = 4.dp),
-        )
+        Caption(f.kind.description)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            CompactField(
+                f.label, { onChange(f.copy(label = it)) },
+                if (f.auto) "Etichetta (facoltativa)" else "Nome del campo, es. Piano", Modifier.weight(1f),
+            )
+            PositionPicker(f.pos) { onChange(f.copy(pos = it)) }
+        }
+        when (f.kind) {
+            FieldKind.CHOICE -> CompactField(f.choices, { onChange(f.copy(choices = it)) }, "Voci separate da virgola, es. P3, P4, P5")
+            FieldKind.FIXED -> CompactField(f.text, { onChange(f.copy(text = it)) }, "Testo da stampare su ogni foto")
+            else -> {}
+        }
         // con l'etichetta: "Piano: 3"; senza: solo "3"
         SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
     }
 }
 
-/** "Aggiungi campo…" con la scelta del tipo: da compilare o automatico. */
+/** Voci di menu per i tipi di campo: nome e spiegazione. */
+@Composable
+private fun KindMenuItems(onPick: (FieldKind) -> Unit) {
+    for (k in FieldKind.entries) DropdownMenuItem(
+        text = {
+            Column {
+                Text(k.label)
+                Caption(k.description)
+            }
+        },
+        onClick = { onPick(k) },
+    )
+}
+
+/** Il tipo del campo; toccandolo se ne sceglie un altro. */
+@Composable
+private fun KindPicker(kind: FieldKind, modifier: Modifier, onPick: (FieldKind) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        Row(
+            Modifier.clickable { open = true }.padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Tipo: ${kind.label}", style = MaterialTheme.typography.titleSmall)
+            Icon(AppIcons.DropDown, "Cambia tipo")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            KindMenuItems { open = false; onPick(it) }
+        }
+    }
+}
+
+/** "Aggiungi campo…" con la scelta del tipo. */
 @Composable
 private fun AddFieldButton(onPick: (FieldKind) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        AppButton("Aggiungi campo…", { open = true })
+        AppButton("Aggiungi campo…", { open = true }, primary = true)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (k in FieldKind.entries) DropdownMenuItem(text = { Text(k.label) }, onClick = { open = false; onPick(k) })
+            KindMenuItems { open = false; onPick(it) }
+        }
+    }
+}
+
+/** Copia lo schema dei campi da un sopralluogo precedente (sostituisce quello attuale). */
+@Composable
+private fun CopyFromButton(templates: List<Session>, onPick: (Session) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.padding(top = 8.dp)) {
+        AppButton("Copia i campi da un sopralluogo…", { open = true })
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (t in templates) DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(t.folder)
+                        Caption(t.fields.joinToString(", ") { it.label.ifBlank { it.kind.defaultLabel } })
+                    }
+                },
+                onClick = { open = false; onPick(t) },
+            )
         }
     }
 }

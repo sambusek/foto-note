@@ -75,7 +75,7 @@ con ◀ ▶ o scorrendo con un dito a foto intera (in modalità "solo penna"), s
 
 **Layout note…** (per sessione) definisce campi con nome e posizione: banda superiore o inferiore, oppure uno (testi sempre in due strisce aggiunte sopra e sotto la foto: angoli 20%, centro 60%)
 dei quattro angoli della foto. Ogni foto ha poi i suoi valori; senza campi resta solo la nota libera, nella
-banda inferiore. Un nuovo sopralluogo parte dal layout dell'ultimo. **Elimina…** in una sessione in corso la
+banda inferiore. Ogni nuovo sopralluogo parte senza campi; con "Copia i campi da un sopralluogo…" si riusa lo schema di uno precedente. **Elimina…** in una sessione in corso la
 abbandona senza salvare nulla.
 
 **Campi automatici** nel layout: data e ora dello scatto, nome del sopralluogo, etichetta fissa. Compaiono
@@ -83,5 +83,5 @@ su tutte le foto della sessione senza doverli compilare.
 
 **Tema**: chiaro, scuro o come il sistema; colore d'accento a scelta oppure quello di sistema (Material You).
 
-**Elenchi di scelte**: un campo da compilare può avere un elenco (es. "Piano" con "P3, P4"); nell'editor si
-sceglie dal menu a tendina accanto al campo, oppure si scrive liberamente.
+**Tipi di campo**: testo libero, elenco di scelte (es. "Piano" con "P3, P4": nell'editor si sceglie dal menu ▾,
+oppure si scrive), data e ora dello scatto, nome del sopralluogo, etichetta fissa.

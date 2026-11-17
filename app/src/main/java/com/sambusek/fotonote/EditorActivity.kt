@@ -313,7 +313,10 @@ private fun EditorScreen(
         ) {
             for (f in inputFields) Row(verticalAlignment = Alignment.CenterVertically) {
                 FieldLabel(f.label)
-                ChoiceField(values[f.id].orEmpty(), { values[f.id] = it }, f.pos.short, f.options)
+                ChoiceField(
+                    values[f.id].orEmpty(), { values[f.id] = it }, f.pos.short,
+                    if (f.kind == FieldKind.CHOICE) f.options else emptyList(),
+                )
             }
             Row {
                 FieldLabel("Nota", Modifier.padding(top = 10.dp))

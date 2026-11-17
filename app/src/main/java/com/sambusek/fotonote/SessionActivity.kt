@@ -126,6 +126,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     if (layoutEdit) {
         LayoutScreen(
             initial = s.fields,
+            templates = remember { SessionStore.all(ctx).filter { it.id != s.id && it.fields.isNotEmpty() } },
             onDone = { SessionStore.save(ctx, s.copy(fields = it)); layoutEdit = false; refresh() },
             onCancel = { layoutEdit = false },
         )
