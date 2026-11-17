@@ -99,3 +99,10 @@ I valori sono quelli registrati al momento dell'emissione.
 
 **Nome utente**: chiesto alla prima apertura; compare nel saluto, nei report PDF e nel campo automatico
 "Nome utente".
+
+## Template
+
+Impostazioni › **Gestisci template…**: schemi di campi pronti, da scegliere quando si inizia un sopralluogo
+(oppure da copiare nel layout delle note). Dal layout di una sessione: ⋮ › **Salva come template…**.
+Ogni template si esporta come file `.pastashoot.json` (⋮ › Esporta e condividi); sull'altro telefono si
+apre il file con Pastashoot o si usa **Importa da file**. Un template con lo stesso nome viene aggiornato.

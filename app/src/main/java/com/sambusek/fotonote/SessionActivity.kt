@@ -139,7 +139,11 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     if (layoutEdit) {
         LayoutScreen(
             initial = s.fields,
-            templates = remember { SessionStore.all(ctx).filter { it.id != s.id && it.fields.isNotEmpty() } },
+            sources = remember { fieldSources(ctx, excludeSession = s.id) },
+            onSaveAsTemplate = { name, f ->
+                TemplateStore.create(ctx, name, f)
+                Toast.makeText(ctx, "Template \"$name\" salvato", Toast.LENGTH_SHORT).show()
+            },
             onDone = { SessionStore.save(ctx, s.copy(fields = it)); layoutEdit = false; refresh() },
             onCancel = { layoutEdit = false },
         )

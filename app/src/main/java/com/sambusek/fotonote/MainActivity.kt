@@ -11,6 +11,13 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.core.content.IntentCompat
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.AlertDialog
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -69,6 +76,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         Notifications.createChannels(this)
         if (Prefs.isMonitoring(this) && MediaHelper.hasPhotoPermission(this)) ServiceControl.start(this)
+        importTemplate(intent)
         setContent {
             AppTheme {
                 var user by remember { mutableStateOf(Prefs.userName(this)) }
@@ -80,6 +88,22 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        importTemplate(intent)
+    }
+
+    /** Un file di template aperto o condiviso con Pastashoot da un'altra app. */
+    private fun importTemplate(i: Intent?) {
+        val uri = when (i?.action) {
+            Intent.ACTION_VIEW -> i.data
+            Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(i, Intent.EXTRA_STREAM, Uri::class.java)
+            else -> null
+        } ?: return
+        TemplateStore.importWithToast(this, uri)
+        tick.intValue++
     }
 
     override fun onResume() {
@@ -144,14 +168,12 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
     }
     var askName by remember { mutableStateOf(false) }
 
-    if (askName) PromptDialog(
-        title = "Nuovo sopralluogo",
-        message = "Il nome diventerà anche il nome della cartella.",
-        placeholder = "es. Via Roma piano 3",
-        confirm = "Inizia",
-        onConfirm = { name ->
+    if (askName) NewSessionDialog(
+        templates = remember { TemplateStore.all(ctx) },
+        onConfirm = { name, template ->
             askName = false
-            ctx.startActivity(SessionActivity.intent(ctx, SessionStore.create(ctx, name).id))
+            val s = SessionStore.create(ctx, name, template?.fields.orEmpty())
+            ctx.startActivity(SessionActivity.intent(ctx, s.id))
         },
         onDismiss = { askName = false },
     )
@@ -209,6 +231,50 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
     }
 }
 
+/** Nome del nuovo sopralluogo e, se ce ne sono, il template da cui prendere i campi. */
+@Composable
+private fun NewSessionDialog(templates: List<Template>, onConfirm: (String, Template?) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var template by remember { mutableStateOf<Template?>(null) }
+    var open by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        title = { Text("Nuovo sopralluogo") },
+        text = {
+            Column {
+                Text("Il nome diventerà anche il nome della cartella.")
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it.replace("\n", " ") }, singleLine = true,
+                    placeholder = { Text("es. Via Roma piano 3") }, shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+                if (templates.isNotEmpty()) {
+                    Text("Template", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                    Box {
+                        AppButton(template?.name ?: "Nessuno (senza campi)", { open = true }, Modifier.fillMaxWidth())
+                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                            DropdownMenuItem(text = { Text("Nessuno (senza campi)") }, onClick = { template = null; open = false })
+                            for (t in templates) DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(t.name)
+                                        Caption(t.fields.summary())
+                                    }
+                                },
+                                onClick = { template = t; open = false },
+                            )
+                        }
+                    }
+                    template?.let { Caption(it.fields.summary(), Modifier.padding(top = 4.dp)) }
+                }
+            }
+        },
+        confirmButton = { TextButton({ onConfirm(name.trim(), template) }, enabled = name.isNotBlank()) { Text("Inizia") } },
+        dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
+    )
+}
+
 // ------------------------------------------------------------------ impostazioni
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -216,6 +282,11 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
 private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val t = tick.intValue
+    var showTemplates by rememberSaveable { mutableStateOf(false) }
+    if (showTemplates) {
+        TemplatesScreen { showTemplates = false; tick.intValue++ }
+        return
+    }
     BackHandler { onBack() }
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         tick.intValue++
@@ -274,6 +345,15 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
                     if (it.isNotBlank()) { Prefs.setUserName(ctx, it); onNameChange(it.trim()) }
                 }, "Nome e cognome")
                 Caption("Usato nei report PDF e nel campo automatico \"Nome utente\".", Modifier.padding(top = 4.dp))
+            }
+
+            Section("Template di sopralluogo") {
+                val n = remember(t) { TemplateStore.all(ctx).size }
+                Caption(
+                    if (n == 0) "Schemi di campi pronti da scegliere quando inizi un sopralluogo, esportabili su altri telefoni."
+                    else "$n template salvati"
+                )
+                AppButton("Gestisci template…", { showTemplates = true }, Modifier.padding(top = 8.dp))
             }
 
             Section("Tema") {

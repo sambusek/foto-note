@@ -49,23 +49,35 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun LayoutScreen(
     initial: List<NoteField>,
-    templates: List<Session>,
+    sources: List<FieldSource>,
     onDone: (List<NoteField>) -> Unit,
     onCancel: () -> Unit,
+    title: String = "Layout delle note",
+    onSaveAsTemplate: ((String, List<NoteField>) -> Unit)? = null,
 ) {
     val fields = remember { mutableStateListOf<NoteField>().apply { addAll(initial) } }
+    var askTemplate by remember { mutableStateOf(false) }
     BackHandler { onCancel() }
 
+    fun cleaned() = fields.filter { it.auto || it.label.isNotBlank() }
+        .map { it.copy(label = it.label.trim(), text = it.text.trim(), choices = it.options.joinToString(", ")) }
+
+    if (askTemplate && onSaveAsTemplate != null) PromptDialog(
+        title = "Salva come template",
+        message = "I campi di questo layout diventano un template riutilizzabile nei prossimi sopralluoghi.",
+        placeholder = "Nome del template",
+        confirm = "Salva",
+        onConfirm = { askTemplate = false; onSaveAsTemplate(it, cleaned()) },
+        onDismiss = { askTemplate = false },
+    )
+
     AppScreen(
-        title = "Layout delle note",
+        title = title,
+        subtitle = if (title != "Layout delle note") "Campi del template" else null,
         onBack = onCancel,
         actions = {
-            BarAction("Salva", {
-                onDone(
-                    fields.filter { it.auto || it.label.isNotBlank() }
-                        .map { it.copy(label = it.label.trim(), text = it.text.trim(), choices = it.options.joinToString(", ")) }
-                )
-            }, primary = true)
+            if (onSaveAsTemplate != null) OverflowMenu(listOf("Salva come template…" to { askTemplate = true }))
+            BarAction("Salva", { onDone(cleaned()) }, primary = true)
         },
     ) {
         Column(
@@ -77,7 +89,7 @@ fun LayoutScreen(
                 "I testi stanno in due strisce aggiunte sopra e sotto la foto, mai sopra la foto. " +
                     "I campi automatici (*) compaiono da soli su tutte le foto."
             )
-            if (templates.isNotEmpty()) CopyFromButton(templates) { src ->
+            if (sources.isNotEmpty()) CopyFromButton(sources) { src ->
                 fields.clear()
                 fields += src.fields
             }
@@ -85,7 +97,7 @@ fun LayoutScreen(
             Section("Campi") {
                 if (fields.isEmpty()) Caption(
                     "Nessun campo: sulle foto ci sarà solo la nota, nella banda inferiore. " +
-                        "Aggiungi un campo o copia lo schema di un sopralluogo precedente."
+                        "Aggiungi un campo o copia lo schema di un template o di un sopralluogo precedente."
                 )
                 fields.forEachIndexed { i, f ->
                     key(f.id) {
@@ -183,21 +195,24 @@ private fun AddFieldButton(onPick: (FieldKind) -> Unit) {
     }
 }
 
-/** Copia lo schema dei campi da un sopralluogo precedente (sostituisce quello attuale). */
+/** Uno schema di campi da cui copiare: un template o un sopralluogo. */
+class FieldSource(val title: String, val fields: List<NoteField>)
+
+/** Copia lo schema dei campi da un template o da un sopralluogo (sostituisce quello attuale). */
 @Composable
-private fun CopyFromButton(templates: List<Session>, onPick: (Session) -> Unit) {
+private fun CopyFromButton(sources: List<FieldSource>, onPick: (FieldSource) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(top = 8.dp)) {
-        AppButton("Copia i campi da un sopralluogo…", { open = true })
+        AppButton("Copia i campi da…", { open = true })
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (t in templates) DropdownMenuItem(
+            for (src in sources) DropdownMenuItem(
                 text = {
                     Column {
-                        Text(t.folder)
-                        Caption(t.fields.joinToString(", ") { it.label.ifBlank { it.kind.defaultLabel } })
+                        Text(src.title)
+                        Caption(src.fields.summary())
                     }
                 },
-                onClick = { open = false; onPick(t) },
+                onClick = { open = false; onPick(src) },
             )
         }
     }

@@ -85,11 +85,11 @@ private fun itemsFromJson(a: JSONArray?) = if (a == null) emptyList() else (0 un
 
 private fun List<SessionItem>.toJson() = JSONArray().also { a -> forEach { a.put(it.toJson()) } }
 
-private fun NoteField.toJson() = JSONObject()
+internal fun NoteField.toJson() = JSONObject()
     .put("id", id).put("label", label).put("pos", pos.name).put("showLabel", showLabel)
     .put("kind", kind.name).put("text", text).put("choices", choices)
 
-private fun fieldFromJson(x: JSONObject): NoteField {
+internal fun fieldFromJson(x: JSONObject): NoteField {
     val choices = x.optString("choices", "")
     var kind = FieldKind.entries.firstOrNull { it.name == x.optString("kind") } ?: FieldKind.INPUT
     if (kind == FieldKind.INPUT && choices.isNotBlank()) kind = FieldKind.CHOICE // versioni precedenti dell'app
@@ -167,15 +167,16 @@ object SessionStore {
         return "${date}_${FileNames.clean(name).take(40).ifEmpty { "SOPRALLUOGO" }}"
     }
 
-    /** Nuova sessione, senza campi: lo schema si può copiare da un sopralluogo precedente. */
-    fun create(c: Context, name: String): Session {
+    /** Nuova sessione, con i campi di un template oppure senza campi. */
+    fun create(c: Context, name: String, fields: List<NoteField> = emptyList()): Session {
         val start = System.currentTimeMillis()
         val used = all(c).map { it.folder }.toSet()
         val base = folderName(start, name)
         var folder = base
         var n = 2
         while (folder in used) folder = "${base}_${n++}"
-        return Session(id = start.toString(), name = name.trim(), folder = folder, start = start).also { save(c, it) }
+        return Session(id = start.toString(), name = name.trim(), folder = folder, start = start, fields = fields)
+            .also { save(c, it) }
     }
 
     /**
