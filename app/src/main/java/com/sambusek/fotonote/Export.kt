@@ -65,6 +65,33 @@ object Exporter {
  */
 object PdfReport {
     private val CP1252: Charset = Charset.forName("windows-1252")
+
+    /** Simboli comuni nelle note di cantiere che i font base del PDF non hanno. */
+    private val SUBST = mapOf(
+        '⌀' to "Ø", '∅' to "Ø", '≈' to "~", '≃' to "~", '≠' to "!=", '≤' to "<=", '≥' to ">=",
+        '→' to "->", '←' to "<-", '↔' to "<->", '⇒' to "=>", '√' to "rad", '∞' to "inf",
+        'Δ' to "Delta", 'α' to "alfa", 'β' to "beta", 'π' to "pi", 'Ω' to "Ohm", '∑' to "Somma",
+        '½' to "1/2", '¼' to "1/4", '¾' to "3/4", '⅓' to "1/3", '✓' to "OK", '✔' to "OK",
+        '✗' to "X", '✘' to "X", '∙' to "·", '−' to "-", '′' to "'", '″' to "\"",
+        '\u00A0' to " ", '\u202F' to " ",
+    )
+
+    private fun pdfSafe(s: String): String {
+        val enc = CP1252.newEncoder()
+        val sb = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            val ch = s[i]
+            when {
+                cp <= 0xFFFF && SUBST.containsKey(ch) -> sb.append(SUBST[ch])
+                cp <= 0xFFFF && enc.canEncode(ch) -> sb.append(ch)
+                else -> {} // emoji e altri simboli non rappresentabili: omessi
+            }
+            i += Character.charCount(cp)
+        }
+        return sb.toString()
+    }
     private const val A4_SHORT = 595f
     private const val A4_LONG = 842f
     private const val MARGIN = 36f
@@ -84,7 +111,7 @@ object PdfReport {
 
         fun text(bold: Boolean, size: Float, x: Float, y: Float, s: String, gray: Float = 0f) {
             raw("BT ${n(gray)} g /${if (bold) "F2" else "F1"} ${n(size)} Tf ${n(x)} ${n(y)} Td (")
-            for (b in s.toByteArray(CP1252)) {
+            for (b in pdfSafe(s).toByteArray(CP1252)) {
                 val ch = b.toInt() and 0xFF
                 if (ch == '('.code || ch == ')'.code || ch == '\\'.code) buf.write('\\'.code)
                 if (ch >= 32) buf.write(ch)

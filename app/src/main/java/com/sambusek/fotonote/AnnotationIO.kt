@@ -83,10 +83,21 @@ object AnnotationStore {
     ) = save(c, src, note, strokes, load(c, src)?.outUri, values, pad)
 
     /** Vero se sulla foto ci sono tratti o testi. */
+    /** Esito di [hasContent] per file, valido finché il file non cambia: evita di rileggere tutti i tratti. */
+    private val contentCache = HashMap<String, Pair<Long, Boolean>>()
+
     fun hasContent(c: Context, src: Uri): Boolean {
+        val f = file(c, src)
+        if (!f.exists()) return false
+        val mod = f.lastModified()
+        synchronized(contentCache) { contentCache[f.name]?.let { (m, v) -> if (m == mod) return v } }
         val a = load(c, src) ?: return false
-        return a.strokes.isNotEmpty() || a.note.isNotBlank() || a.values.values.any { it.isNotBlank() } || !a.pad.isZero
+        val v = a.strokes.isNotEmpty() || a.note.isNotBlank() || a.values.values.any { it.isNotBlank() } || !a.pad.isZero
+        synchronized(contentCache) { contentCache[f.name] = mod to v }
+        return v
     }
+
+    private fun round(v: Float, f: Int): Double = Math.round(v.toDouble() * f) / f.toDouble()
 
     /** Annotazione così com'è salvata (per il pacchetto del sopralluogo). */
     fun rawJson(c: Context, src: Uri): JSONObject? =
@@ -113,7 +124,7 @@ object AnnotationStore {
         val arr = JSONArray()
         for (s in strokes) {
             val p = JSONArray()
-            for (pt in s.points) { p.put(pt.x.toDouble()); p.put(pt.y.toDouble()); p.put(pt.p.toDouble()) }
+            for (pt in s.points) { p.put(round(pt.x, 10)); p.put(round(pt.y, 10)); p.put(round(pt.p, 100)) }
             arr.put(JSONObject().put("c", s.color).put("w", s.width.toDouble()).put("p", p))
         }
         val o = JSONObject()
@@ -182,26 +193,7 @@ object AnnotationIO {
         // da qui in poi l'origine è l'angolo in alto a sinistra della foto
         canvas.translate(l.toFloat(), t.toFloat())
         canvas.drawBitmap(base, 0f, 0f, null)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeCap = Paint.Cap.ROUND
-        }
-        val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        for (s in strokes) {
-            paint.color = s.color
-            dot.color = s.color
-            val pts = s.points
-            if (pts.size == 1) {
-                canvas.drawCircle(pts[0].x, pts[0].y, pressureWidth(s.width, pts[0].p) / 2f, dot)
-                continue
-            }
-            for (i in 1 until pts.size) {
-                val a = pts[i - 1]
-                val b = pts[i]
-                paint.strokeWidth = pressureWidth(s.width, (a.p + b.p) / 2f)
-                canvas.drawLine(a.x, a.y, b.x, b.y, paint)
-            }
-        }
+        drawStrokes(canvas, strokes)
         return out
     }
 

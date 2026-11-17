@@ -44,6 +44,30 @@ class Stroke(val color: Int, val width: Float, val points: List<Pt>)
 /** Spessore effettivo in base alla pressione. */
 fun pressureWidth(width: Float, p: Float): Float = width * (0.35f + 0.65f * p.coerceIn(0f, 1f))
 
+/** Disegna i tratti su un canvas Android: usato per il salvataggio e per la cache a schermo. */
+fun drawStrokes(canvas: android.graphics.Canvas, strokes: List<Stroke>) {
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        strokeCap = android.graphics.Paint.Cap.ROUND
+    }
+    val dot = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.FILL }
+    for (s in strokes) {
+        paint.color = s.color
+        dot.color = s.color
+        val pts = s.points
+        if (pts.size == 1) {
+            canvas.drawCircle(pts[0].x, pts[0].y, pressureWidth(s.width, pts[0].p) / 2f, dot)
+            continue
+        }
+        for (i in 1 until pts.size) {
+            val a = pts[i - 1]
+            val b = pts[i]
+            paint.strokeWidth = pressureWidth(s.width, (a.p + b.p) / 2f)
+            canvas.drawLine(a.x, a.y, b.x, b.y, paint)
+        }
+    }
+}
+
 /** Spazio bianco aggiunto attorno alla foto, in pixel della foto (sinistra, sopra, destra, sotto). */
 data class Pad(val l: Float = 0f, val t: Float = 0f, val r: Float = 0f, val b: Float = 0f) {
     val isZero: Boolean get() = l < 0.5f && t < 0.5f && r < 0.5f && b < 0.5f
@@ -373,6 +397,18 @@ fun InkCanvas(
 
     LaunchedEffect(contentH, canvasW, topH, canvasMode) { resetView() }
 
+    // i tratti conclusi cambiano solo a fine tratto, annulla o gomma: si registrano una volta
+    // e a ogni fotogramma si riproduce la registrazione invece di ridisegnare ogni segmento
+    val strokesPicture = remember(state.strokes) {
+        android.graphics.Picture().apply {
+            val size = (STROKE_MARGIN * 2 + maxOf(image.width, image.height) * 3).toInt()
+            val rec = beginRecording(size, size)
+            rec.translate(STROKE_MARGIN, STROKE_MARGIN)
+            drawStrokes(rec, state.strokes)
+            endRecording()
+        }
+    }
+
     Canvas(
         modifier
             .fillMaxSize()
@@ -396,7 +432,13 @@ fun InkCanvas(
                     it.nativeCanvas.restore()
                 }
             }
-            for (s in state.strokes) drawStrokeC(Color(s.color), s.width, s.points)
+            drawIntoCanvas {
+                val nc = it.nativeCanvas
+                nc.save()
+                nc.translate(-STROKE_MARGIN, -STROKE_MARGIN)
+                nc.drawPicture(strokesPicture)
+                nc.restore()
+            }
             if (state.current.isNotEmpty()) {
                 drawStrokeC(Color(state.color), state.widthFactor * maxSide, state.current)
             }
@@ -415,6 +457,9 @@ fun InkCanvas(
         }
     }
 }
+
+/** Margine della registrazione dei tratti: copre anche quelli disegnati sullo spazio aggiunto. */
+private const val STROKE_MARGIN = 8192f
 
 private fun DrawScope.drawStrokeC(color: Color, width: Float, pts: List<Pt>) {
     if (pts.size == 1) {
