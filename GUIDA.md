@@ -45,12 +45,12 @@ Il layout decide quali campi compaiono sulle foto e dove. Lo imposti per ogni so
 | Tipo di campo | Cosa contiene | Esempio |
 | --- | --- | --- |
 | Testo | Scritto a mano foto per foto | Osservazione |
-| Scelta | Una voce da una lista, importabile da TXT o CSV | Piano: P3, P4 |
+| Scelta | Solo una delle voci della lista, importabile da TXT o CSV | Piano: P3, P4 |
 | Data, Ora | Riempiti da soli con il momento dello scatto | 17/11/2026 |
 | Sopralluogo, Utente | Riempiti da soli con il nome del sopralluogo e il tuo | 261118 SAL |
 | Fisso | Stesso testo su tutte le foto | Committente |
 
-Ogni campo va in una fascia, sopra o sotto la foto, e in una posizione: sinistra, centro o destra. L'anteprima nel layout mostra dove cade. Per ogni campo puoi mostrare o nascondere l'etichetta prima del testo.
+Ogni campo va in una fascia, sopra o sotto la foto, e in una posizione: sinistra, centro o destra. L'anteprima nel layout mostra dove cade. Per ogni campo puoi mostrare o nascondere l'etichetta prima del testo. Con le frecce su e giù accanto a ogni campo ne cambi l'ordine: è l'ordine in cui compaiono nell'editor e sulla fascia.
 
 I template si gestiscono da Impostazioni › **Template di sopralluogo**. Si possono condividere e importare su un altro telefono; con **Copia i campi da…** riprendi i campi di un altro sopralluogo o template.
 
