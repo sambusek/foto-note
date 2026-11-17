@@ -111,3 +111,11 @@ apre il file con Pastashoot o si usa **Importa da file**. Un template con lo ste
 **Nota generale**: ⋮ › Nota generale… — va nella copertina del report PDF e come `Nota_sopralluogo.txt` nello ZIP.
 **Tela**: nell'editor l'icona "allarga" fa comparire una cornice con maniglie: trascinando i bordi si aggiunge
 spazio bianco attorno alla foto, dove disegnare e annotare. Il file salvato include lo spazio aggiunto.
+
+## Passare un sopralluogo in corso a un altro telefono
+
+Nella sessione in corso: ⋮ › **Esporta per un altro telefono…** crea `YYMMDD_NOME.pastashoot.zip` con le foto
+originali (GPS compreso), disegni, testi, campi, layout e nota generale (le versioni emesse non sono incluse).
+Sull'altro telefono si apre il file con Pastashoot, oppure home › ⋮ › **Importa un sopralluogo…**: le foto vanno in
+`Immagini/Pastashoot/Importati/CARTELLA` e il sopralluogo riparte come sessione in corso, a cui si aggiungono le
+foto scattate da quel momento. Serve che sull'altro telefono non ci sia già una sessione in corso.

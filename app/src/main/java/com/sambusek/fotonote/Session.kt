@@ -112,7 +112,7 @@ internal fun fieldFromJson(x: JSONObject): NoteField {
     )
 }
 
-private fun Session.toJson(): JSONObject {
+internal fun Session.toJson(): JSONObject {
     val fl = JSONArray().also { a -> fields.forEach { a.put(it.toJson()) } }
     val vs = JSONArray().also { a ->
         versions.forEach {
@@ -135,7 +135,7 @@ private fun Session.toJson(): JSONObject {
         .put("pauses", JSONArray().also { a -> pauses.forEach { a.put(JSONArray().put(it.start).put(it.end)) } })
 }
 
-private fun sessionFromJson(o: JSONObject): Session {
+internal fun sessionFromJson(o: JSONObject): Session {
     val fl = o.optJSONArray("fields")
     val vs = o.optJSONArray("versions")
     return Session(
@@ -198,14 +198,19 @@ object SessionStore {
         return "${date}_${FileNames.clean(name).take(40).ifEmpty { "SOPRALLUOGO" }}"
     }
 
-    /** Nuova sessione, con i campi di un template oppure senza campi. */
-    fun create(c: Context, name: String, fields: List<NoteField> = emptyList()): Session {
-        val start = System.currentTimeMillis()
+    /** [base] o, se già usato da un altro sopralluogo, [base]_2, _3… */
+    fun uniqueFolder(c: Context, base: String): String {
         val used = all(c).map { it.folder }.toSet()
-        val base = folderName(start, name)
         var folder = base
         var n = 2
         while (folder in used) folder = "${base}_${n++}"
+        return folder
+    }
+
+    /** Nuova sessione, con i campi di un template oppure senza campi. */
+    fun create(c: Context, name: String, fields: List<NoteField> = emptyList()): Session {
+        val start = System.currentTimeMillis()
+        val folder = uniqueFolder(c, folderName(start, name))
         return Session(id = start.toString(), name = name.trim(), folder = folder, start = start, fields = fields)
             .also { save(c, it) }
     }
@@ -292,10 +297,9 @@ object SessionOps {
     var busy by mutableStateOf<String?>(null)
         private set
     var progress by mutableFloatStateOf(0f)
-        private set
 
     /** Esegue [work] in background mostrando [message]; [done] gira sul thread principale. */
-    private fun <T> launchOp(message: String, work: suspend () -> T, done: (T?) -> Unit) {
+    fun <T> launchOp(message: String, work: suspend () -> T, done: (T?) -> Unit) {
         if (busy != null) return
         busy = message; progress = 0f
         scope.launch {

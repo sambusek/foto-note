@@ -301,6 +301,12 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                         "Nota generale…" to { editNote = true },
                         "Aggiungi foto già scattate…" to { picking = true },
                         "Layout delle note…" to { layoutEdit = true },
+                        "Esporta per un altro telefono…" to {
+                            SessionOps.exportPackage(ctx, s) { f ->
+                                if (f == null) Toast.makeText(ctx, "Non sono riuscito a creare il pacchetto", Toast.LENGTH_LONG).show()
+                                else Exporter.share(ctx, f, "application/zip", "Invia il sopralluogo")
+                            }
+                        },
                         "Elimina sessione…" to { askDiscard = true },
                     )
                 )

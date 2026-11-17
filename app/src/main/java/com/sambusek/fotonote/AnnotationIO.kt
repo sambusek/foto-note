@@ -88,6 +88,16 @@ object AnnotationStore {
         return a.strokes.isNotEmpty() || a.note.isNotBlank() || a.values.values.any { it.isNotBlank() } || !a.pad.isZero
     }
 
+    /** Annotazione così com'è salvata (per il pacchetto del sopralluogo). */
+    fun rawJson(c: Context, src: Uri): JSONObject? =
+        file(c, src).takeIf { it.exists() }?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
+
+    /** Scrive un'annotazione importata, legandola alla foto [src] di questo telefono. */
+    fun writeRaw(c: Context, src: Uri, o: JSONObject) {
+        o.put("source", src.toString()).put("out", "")
+        file(c, src).writeText(o.toString())
+    }
+
     fun remove(c: Context, src: Uri) {
         file(c, src).delete()
     }

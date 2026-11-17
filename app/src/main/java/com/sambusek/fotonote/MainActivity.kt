@@ -103,21 +103,33 @@ class MainActivity : ComponentActivity() {
         importTemplate(intent)
     }
 
-    /** Un file di template aperto o condiviso con Pastashoot da un'altra app. */
+    /** Un file aperto o condiviso con Pastashoot da un'altra app: template o pacchetto di sopralluogo. */
     private fun importTemplate(i: Intent?) {
         val uri = when (i?.action) {
             Intent.ACTION_VIEW -> i.data
             Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(i, Intent.EXTRA_STREAM, Uri::class.java)
             else -> null
         } ?: return
-        TemplateStore.importWithToast(this, uri)
-        tick.intValue++
+        if (SessionPackage.isZip(this, uri)) importSession(this, uri) { tick.intValue++ }
+        else {
+            TemplateStore.importWithToast(this, uri)
+            tick.intValue++
+        }
     }
 
     override fun onResume() {
         super.onResume()
         tick.intValue++
     }
+}
+
+/** Importa un pacchetto di sopralluogo e, se riesce, apre la sessione. */
+private fun importSession(c: Context, uri: Uri, onDone: () -> Unit) = SessionOps.importPackage(c, uri) { r ->
+    r.onSuccess { s ->
+        Toast.makeText(c, "Sopralluogo \"${s.name}\" importato: ${s.extra.size} foto", Toast.LENGTH_LONG).show()
+        c.startActivity(SessionActivity.intent(c, s.id))
+    }.onFailure { Toast.makeText(c, "Impossibile importare: ${it.message}", Toast.LENGTH_LONG).show() }
+    onDone()
 }
 
 private fun granted(c: Context, p: String) =
@@ -176,6 +188,10 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
     }
     var askName by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val packagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importSession(ctx, uri) { tick.intValue++ }
+    }
+    SessionOps.busy?.let { ProgressDialog(it, SessionOps.progress) }
     val selected = remember { mutableStateListOf<String>() }   // id dei sopralluoghi selezionati
     var askDelete by remember { mutableStateOf(false) }
     val selecting = selected.isNotEmpty()
@@ -226,7 +242,20 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
             if (selecting) {
                 BarAction("Tutti", { selected.clear(); selected.addAll(closed.map { it.id }) })
                 ToolIcon(AppIcons.Delete, "Elimina i selezionati", { askDelete = true })
-            } else ToolIcon(AppIcons.Tune, "Impostazioni", onSettings)
+            } else {
+                ToolIcon(AppIcons.Tune, "Impostazioni", onSettings)
+                OverflowMenu(
+                    listOf(
+                        "Importa un sopralluogo…" to {
+                            if (active != null) Toast.makeText(
+                                ctx, "C'è già un sopralluogo in corso: consolidalo o eliminalo prima di importarne un altro",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            else packagePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                        },
+                    )
+                )
+            }
         },
     ) {
         // in alto saluto e sessione; sotto (o a destra, su schermi larghi) i sopralluoghi salvati

@@ -112,6 +112,17 @@ object MediaHelper {
         System.currentTimeMillis()
     }
 
+    /** Apre la foto originale, con la posizione GPS se il permesso lo consente. */
+    fun openOriginal(c: Context, uri: Uri): java.io.InputStream? {
+        val cr = c.contentResolver
+        val gps = ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_MEDIA_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (gps && uri.authority == MediaStore.AUTHORITY) {
+            runCatching { cr.openInputStream(MediaStore.setRequireOriginal(uri)) }.getOrNull()?.let { return it }
+        }
+        return cr.openInputStream(uri)
+    }
+
     fun displayName(cr: ContentResolver, uri: Uri): String? = try {
         cr.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null
