@@ -19,20 +19,11 @@ android {
         versionName = "0.2.$buildNumber"
     }
 
-    // Chiave fissa: così ogni nuovo APK si installa sopra il precedente
-    // senza dover disinstallare (e senza perdere le annotazioni).
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
+    // La build release esce non firmata: la firma (con la chiave privata e la rotazione
+    // dalla vecchia chiave) la fa la build di GitHub con apksigner, vedi README, «Chiave di firma».
     buildTypes {
-        debug {
-            signingConfig = signingConfigs.getByName("debug")
+        release {
+            isMinifyEnabled = false
         }
     }
 
