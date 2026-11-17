@@ -249,17 +249,6 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                 ToolIcon(AppIcons.Delete, "Elimina i selezionati", { askDelete = true })
             } else {
                 ToolIcon(AppIcons.Tune, "Impostazioni", onSettings)
-                OverflowMenu(
-                    listOf(
-                        "Importa un sopralluogo…" to {
-                            if (active != null) Toast.makeText(
-                                ctx, "C'è già un sopralluogo in corso: consolidalo o eliminalo prima di importarne un altro",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                            else packagePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
-                        },
-                    )
-                )
             }
         },
     ) {
@@ -310,6 +299,16 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
         }
         val saved: @Composable ColumnScope.() -> Unit = {
             Section("Sopralluoghi salvati") {
+                if (!selecting) {
+                    ActionRow(AppIcons.Add, "Importa un sopralluogo…", "Da un file ricevuto da un altro telefono") {
+                        if (active != null) Toast.makeText(
+                            ctx, "C'è già un sopralluogo in corso: consolidalo o eliminalo prima di importarne un altro",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        else packagePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                    }
+                    ListDivider()
+                }
                 if (closed.isEmpty()) Caption("Ancora nessuno. I sopralluoghi chiusi compaiono qui.")
                 else if (!selecting) Caption("Tieni premuto un sopralluogo per selezionarne più di uno.")
                 closed.forEachIndexed { i, s ->

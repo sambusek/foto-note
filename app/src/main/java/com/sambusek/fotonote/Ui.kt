@@ -365,6 +365,27 @@ fun ListRow(
     }
 }
 
+/** Riga di azione in testa a un elenco: icona e testo nel colore d'accento. */
+@Composable
+fun ActionRow(icon: ImageVector, title: String, subtitle: String? = null, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = cs.primary, modifier = Modifier.padding(end = 12.dp).size(22.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = cs.primary)
+            if (subtitle != null) Caption(subtitle)
+        }
+    }
+}
+
 @Composable
 fun ListDivider() = HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
