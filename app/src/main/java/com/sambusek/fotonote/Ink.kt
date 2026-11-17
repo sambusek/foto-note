@@ -54,7 +54,7 @@ class InkState {
     var pad by mutableStateOf(Pad())
         private set
 
-    fun setPad(p: Pad) {
+    fun changePad(p: Pad) {
         if (p != pad) { pad = p; dirty = true }
     }
 
@@ -235,7 +235,7 @@ fun InkCanvas(
         g.lastX = x; g.lastY = y
         val p = state.pad
         // ogni lato si può allargare al massimo di una volta il lato lungo della foto
-        state.setPad(
+        state.changePad(
             Pad(
                 if (g.dragL) (p.l - dx).coerceIn(0f, maxSide) else p.l,
                 if (g.dragT) (p.t - dy).coerceIn(0f, maxSide) else p.t,

@@ -249,7 +249,7 @@ private fun EditorScreen(
             OverflowMenu(
                 listOfNotNull(
                     if (ink.strokes.isNotEmpty()) "Cancella tutti i tratti" to { ink.clearAll() } else null,
-                    if (!ink.pad.isZero) "Togli lo spazio bianco" to { ink.setPad(Pad()) } else null,
+                    if (!ink.pad.isZero) "Togli lo spazio bianco" to { ink.changePad(Pad()) } else null,
                     (if (canvasMode) "Torna al disegno" else "Allarga la tela…") to { canvasMode = !canvasMode },
                 )
             )
@@ -261,7 +261,7 @@ private fun EditorScreen(
                     "Trascina i bordi o le maniglie per aggiungere spazio bianco attorno alla foto. " +
                         "Tocca di nuovo l'icona per tornare a disegnare.",
                     action = if (ink.pad.isZero) null else "Azzera",
-                    onAction = { ink.setPad(Pad()) },
+                    onAction = { ink.changePad(Pad()) },
                 )
                 // barra degli strumenti: una sola riga di icone
                 Row(
