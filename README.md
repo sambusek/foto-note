@@ -106,3 +106,8 @@ Impostazioni › **Gestisci template…**: schemi di campi pronti, da scegliere 
 (oppure da copiare nel layout delle note). Dal layout di una sessione: ⋮ › **Salva come template…**.
 Ogni template si esporta come file `.pastashoot.json` (⋮ › Esporta e condividi); sull'altro telefono si
 apre il file con Pastashoot o si usa **Importa da file**. Un template con lo stesso nome viene aggiornato.
+
+**Pausa**: ⏸ nella sessione mette in pausa il sopralluogo (es. pranzo); le foto scattate in pausa non entrano.
+**Nota generale**: ⋮ › Nota generale… — va nella copertina del report PDF e come `Nota_sopralluogo.txt` nello ZIP.
+**Tela**: nell'editor l'icona "allarga" fa comparire una cornice con maniglie: trascinando i bordi si aggiunge
+spazio bianco attorno alla foto, dove disegnare e annotare. Il file salvato include lo spazio aggiunto.

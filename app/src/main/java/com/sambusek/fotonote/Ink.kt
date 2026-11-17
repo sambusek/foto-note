@@ -17,6 +17,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.geometry.Size
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
@@ -40,7 +44,21 @@ class Stroke(val color: Int, val width: Float, val points: List<Pt>)
 /** Spessore effettivo in base alla pressione. */
 fun pressureWidth(width: Float, p: Float): Float = width * (0.35f + 0.65f * p.coerceIn(0f, 1f))
 
+/** Spazio bianco aggiunto attorno alla foto, in pixel della foto (sinistra, sopra, destra, sotto). */
+data class Pad(val l: Float = 0f, val t: Float = 0f, val r: Float = 0f, val b: Float = 0f) {
+    val isZero: Boolean get() = l < 0.5f && t < 0.5f && r < 0.5f && b < 0.5f
+}
+
 class InkState {
+    /** Tela: spazio bianco attorno alla foto. */
+    var pad by mutableStateOf(Pad())
+        private set
+
+    fun setPad(p: Pad) {
+        if (p != pad) { pad = p; dirty = true }
+    }
+
+
     var strokes by mutableStateOf<List<Stroke>>(emptyList())
         private set
     val current = mutableStateListOf<Pt>()
@@ -59,8 +77,9 @@ class InkState {
     private val redoStack = ArrayDeque<List<Stroke>>()
     private var eraseStart: List<Stroke>? = null
 
-    fun restore(saved: List<Stroke>) {
+    fun restore(saved: List<Stroke>, savedPad: Pad = Pad()) {
         strokes = saved
+        pad = savedPad
         undoStack.clear(); redoStack.clear(); refresh()
     }
 
@@ -125,7 +144,7 @@ class InkState {
     }
 }
 
-private enum class Mode { NONE, DRAW, ERASE, TRANSFORM }
+private enum class Mode { NONE, DRAW, ERASE, TRANSFORM, RESIZE }
 
 private class Gesture {
     var mode = Mode.NONE
@@ -134,6 +153,13 @@ private class Gesture {
     var prevCy = 0f
     var prevSpan = 0f
     var swipeOk = false
+    // bordi della tela trascinati (modalità tela)
+    var dragL = false
+    var dragT = false
+    var dragR = false
+    var dragB = false
+    var lastX = 0f
+    var lastY = 0f
     var swipeX = 0f
     var swipeY = 0f
 }
@@ -152,16 +178,21 @@ fun InkCanvas(
     stylusOnly: Boolean,
     overlay: Overlay? = null,
     modifier: Modifier = Modifier,
+    canvasMode: Boolean = false,
     onSwipe: ((Int) -> Unit)? = null,
 ) {
     val density = LocalDensity.current.density
     val swipe by rememberUpdatedState(onSwipe)
+    val accent = MaterialTheme.colorScheme.primary
     val imgW = image.width.toFloat()
     val photoH = image.height.toFloat()
     val maxSide = maxOf(imgW, photoH)
-    // anteprima della banda con la nota, come verrà salvata
+    val pad = state.pad
+    // tela = foto + spazio bianco; sopra e sotto le strisce dei testi, come verranno salvate
+    val canvasW = imgW + pad.l + pad.r
+    val canvasH = photoH + pad.t + pad.b
     val topH = (overlay?.topH ?: 0).toFloat()
-    val imgH = topH + photoH + (overlay?.bottomH ?: 0)
+    val contentH = topH + canvasH + (overlay?.bottomH ?: 0)
 
     var fitK by remember { mutableFloatStateOf(1f) }
     var k by remember { mutableFloatStateOf(1f) }
@@ -171,12 +202,48 @@ fun InkCanvas(
     var viewH by remember { mutableFloatStateOf(0f) }
     val g = remember { Gesture() }
 
+    /** Inquadra tutto il contenuto; in modalità tela lascia margine per allargare i bordi. */
     fun resetView() {
-        if (viewW <= 0f) return
-        val f = min(viewW / imgW, viewH / imgH)
+        if (viewW <= 0f || g.mode == Mode.RESIZE) return
+        val f = min(viewW / canvasW, viewH / contentH) * (if (canvasMode) 0.7f else 1f)
         fitK = f; k = f
-        tx = (viewW - imgW * f) / 2f
-        ty = (viewH - imgH * f) / 2f + topH * f
+        // l'origine (0,0) è l'angolo in alto a sinistra della foto
+        tx = (viewW - canvasW * f) / 2f + pad.l * f
+        ty = (viewH - contentH * f) / 2f + (topH + pad.t) * f
+    }
+
+    /** In modalità tela: quali bordi si trovano sotto il dito, entro una tolleranza. */
+    fun grabEdges(x: Float, y: Float): Boolean {
+        val tol = 28f * density
+        val left = tx - pad.l * k
+        val right = tx + (imgW + pad.r) * k
+        val top = ty - pad.t * k
+        val bottom = ty + (photoH + pad.b) * k
+        val inY = y in (top - tol)..(bottom + tol)
+        val inX = x in (left - tol)..(right + tol)
+        g.dragL = inY && abs(x - left) < tol
+        g.dragR = inY && abs(x - right) < tol
+        g.dragT = inX && abs(y - top) < tol
+        g.dragB = inX && abs(y - bottom) < tol
+        g.lastX = x; g.lastY = y
+        return g.dragL || g.dragR || g.dragT || g.dragB
+    }
+
+    fun dragEdges(x: Float, y: Float) {
+        val dx = (x - g.lastX) / k
+        val dy = (y - g.lastY) / k
+        g.lastX = x; g.lastY = y
+        val p = state.pad
+        // ogni lato si può allargare al massimo di una volta il lato lungo della foto
+        state.setPad(
+            Pad(
+                if (g.dragL) (p.l - dx).coerceIn(0f, maxSide) else p.l,
+                if (g.dragT) (p.t - dy).coerceIn(0f, maxSide) else p.t,
+                if (g.dragR) (p.r + dx).coerceIn(0f, maxSide) else p.r,
+                if (g.dragB) (p.b + dy).coerceIn(0f, maxSide) else p.b,
+            )
+        )
+        // il bordo segue il dito: la foto resta ferma sullo schermo
     }
 
     fun toImg(sx: Float, sy: Float) = Offset((sx - tx) / k, (sy - ty) / k)
@@ -232,6 +299,11 @@ fun InkCanvas(
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 g.prevCount = -1
+                if (canvasMode) {
+                    g.mode = if (grabEdges(ev.x, ev.y)) Mode.RESIZE else Mode.TRANSFORM
+                    if (g.mode == Mode.TRANSFORM) applyTransform(ev)
+                    return true
+                }
                 g.mode = when {
                     isPen && (penButton || tool == MotionEvent.TOOL_TYPE_ERASER || state.eraser) -> Mode.ERASE
                     isPen -> Mode.DRAW
@@ -267,6 +339,7 @@ fun InkCanvas(
             MotionEvent.ACTION_MOVE -> when (g.mode) {
                 Mode.DRAW, Mode.ERASE -> addPoints(ev, !isPen)
                 Mode.TRANSFORM -> applyTransform(ev)
+                Mode.RESIZE -> dragEdges(ev.x, ev.y)
                 Mode.NONE -> {}
             }
             MotionEvent.ACTION_UP -> {
@@ -283,18 +356,22 @@ fun InkCanvas(
                     else -> {}
                 }
                 g.swipeOk = false
+                val wasResize = g.mode == Mode.RESIZE
                 g.mode = Mode.NONE
+                if (wasResize) resetView()
             }
             MotionEvent.ACTION_CANCEL -> {
                 if (g.mode == Mode.DRAW) state.cancelStroke()
                 if (g.mode == Mode.ERASE) state.endErase()
+                val wasResize = g.mode == Mode.RESIZE
                 g.mode = Mode.NONE
+                if (wasResize) resetView()
             }
         }
         return true
     }
 
-    LaunchedEffect(imgH, topH) { resetView() }
+    LaunchedEffect(contentH, canvasW, topH, canvasMode) { resetView() }
 
     Canvas(
         modifier
@@ -309,11 +386,31 @@ fun InkCanvas(
             translate(tx, ty)
             scale(k, k, pivot = Offset.Zero)
         }) {
+            if (!pad.isZero || canvasMode) drawRect(Color.White, Offset(-pad.l, -pad.t), Size(canvasW, canvasH))
             drawImage(image)
-            overlay?.let { o -> drawIntoCanvas { o.draw(it.nativeCanvas, photoH) } }
+            overlay?.let { o ->
+                drawIntoCanvas {
+                    it.nativeCanvas.save()
+                    it.nativeCanvas.translate(-pad.l, -pad.t)
+                    o.draw(it.nativeCanvas, canvasH)
+                    it.nativeCanvas.restore()
+                }
+            }
             for (s in state.strokes) drawStrokeC(Color(s.color), s.width, s.points)
             if (state.current.isNotEmpty()) {
                 drawStrokeC(Color(state.color), state.widthFactor * maxSide, state.current)
+            }
+            if (canvasMode) {
+                // cornice della tela con le maniglie, di dimensione costante sullo schermo
+                val w = 2.dp.toPx() / k
+                val h = 14.dp.toPx() / k
+                val l = -pad.l
+                val t = -pad.t
+                drawRect(accent, Offset(l, t), Size(canvasW, canvasH), style = DrawStroke(w))
+                for (hx in listOf(l, l + canvasW / 2, l + canvasW)) for (hy in listOf(t, t + canvasH / 2, t + canvasH)) {
+                    if (hx == l + canvasW / 2 && hy == t + canvasH / 2) continue
+                    drawRect(accent, Offset(hx - h / 2, hy - h / 2), Size(h, h))
+                }
             }
         }
     }

@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.TextButton
@@ -88,6 +89,7 @@ class SessionActivity : ComponentActivity() {
 }
 
 private val dateTimeFmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY)
+private val timeFmt = SimpleDateFormat("HH:mm", Locale.ITALY)
 
 @Composable
 private fun SessionScreen(id: String, tick: MutableIntState, onClose: () -> Unit) {
@@ -134,6 +136,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     var askClose by remember { mutableStateOf(false) }
     var askDiscard by remember { mutableStateOf(false) }
     var askVersion by remember { mutableStateOf(false) }
+    var editNote by remember { mutableStateOf(false) }
     var showReleases by remember { mutableStateOf(false) }
 
     fun endSelection() { selecting = false; selected.clear() }
@@ -184,6 +187,14 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
         },
         dismiss = "Annulla",
         onDismiss = { askDiscard = false },
+    )
+
+    if (editNote) TextDialog(
+        title = "Nota generale",
+        message = "Va nella copertina del report PDF e, come file di testo, nello ZIP.",
+        initial = s.generalNote,
+        onConfirm = { SessionStore.save(ctx, s.copy(generalNote = it)); editNote = false; refresh() },
+        onDismiss = { editNote = false },
     )
 
     if (askVersion) ConfirmDialog(
@@ -267,7 +278,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     AppScreen(
         title = if (selecting) "${selected.size} selezionate" else s.name,
         subtitle = if (selecting) "Tocca le foto a cui dare lo stesso testo"
-        else "In corso · $included foto · ${annotated.size} annotate",
+        else "${if (s.paused) "In pausa" else "In corso"} · $included foto · ${annotated.size} annotate",
         onBack = { if (selecting) endSelection() else onClose() },
         actions = {
             if (selecting) {
@@ -277,11 +288,17 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                 })
                 BarAction("Testo…", { multiOpen = true }, primary = true, enabled = selected.isNotEmpty())
             } else {
-                ToolIcon(AppIcons.Camera, "Fotocamera", { openCamera(ctx) })
+                ToolIcon(
+                    if (s.paused) AppIcons.Play else AppIcons.Pause,
+                    if (s.paused) "Riprendi il sopralluogo" else "Metti in pausa",
+                    { SessionStore.togglePause(ctx, s); refresh() },
+                )
+                ToolIcon(AppIcons.Camera, "Fotocamera", { openCamera(ctx) }, enabled = !s.paused)
                 ToolIcon(AppIcons.TextFields, "Testo su più foto", { selecting = true }, enabled = included > 0)
                 OverflowMenu(
                     listOfNotNull(
                         if (s.versions.isNotEmpty()) "Versioni emesse (${s.versions.size})…" to { showReleases = true } else null,
+                        "Nota generale…" to { editNote = true },
                         "Aggiungi foto già scattate…" to { picking = true },
                         "Layout delle note…" to { layoutEdit = true },
                         "Elimina sessione…" to { askDiscard = true },
@@ -299,6 +316,17 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
             }
         },
     ) {
+        if (s.paused && !selecting) InfoBanner(
+            AppIcons.Pause,
+            "In pausa dalle ${timeFmt.format(Date(s.pauses.last().start))}: le foto scattate ora non entrano nel sopralluogo.",
+            action = "Riprendi", onAction = { SessionStore.togglePause(ctx, s); refresh() },
+        )
+        if (s.generalNote.isNotBlank() && !selecting) Text(
+            "Nota generale: ${s.generalNote}",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().clickable { editNote = true }.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
         if (photos.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CenterMessage("Ancora nessuna foto.\nScatta con la fotocamera: le foto compaiono qui.")
@@ -420,24 +448,16 @@ private fun ClosedScreen(s: Session, onClose: () -> Unit) {
             }
         },
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.secondaryContainer)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(AppIcons.Lock, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
-            Text(
-                "Questo sopralluogo risulta chiuso e consolidato nella propria versione finale, quindi non è " +
-                    "possibile modificare disegni e annotazioni.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(start = 10.dp),
-            )
-        }
+        InfoBanner(
+            AppIcons.Lock,
+            "Questo sopralluogo risulta chiuso e consolidato nella propria versione finale, quindi non è " +
+                "possibile modificare disegni e annotazioni.",
+        )
+        if (s.generalNote.isNotBlank()) Text(
+            "Nota generale: ${s.generalNote}",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        )
         LazyVerticalGrid(
             columns = GridCells.Adaptive(92.dp),
             contentPadding = PaddingValues(GridGap),

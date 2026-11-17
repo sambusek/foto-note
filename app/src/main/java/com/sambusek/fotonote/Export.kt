@@ -20,9 +20,14 @@ import java.util.zip.ZipOutputStream
 
 object Exporter {
     /** ZIP con le foto di un'emissione, dentro una cartella col suo nome, chiamate come [names]. */
-    fun zip(c: Context, r: Release, names: List<String>, out: File, onProgress: (Float) -> Unit) {
+    fun zip(c: Context, r: Release, names: List<String>, note: String?, out: File, onProgress: (Float) -> Unit) {
         val used = HashSet<String>()
         ZipOutputStream(BufferedOutputStream(FileOutputStream(out))).use { zos ->
+            if (note != null) {
+                zos.putNextEntry(ZipEntry("${r.folder}/Nota_sopralluogo.txt"))
+                zos.write(note.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
             zos.setLevel(0) // i JPEG sono già compressi
             r.items.forEachIndexed { i, item ->
                 val wanted = names.getOrNull(i) ?: item.name
@@ -100,6 +105,25 @@ object PdfReport {
         return if (w <= maxWidth) size else size * maxWidth / w
     }
 
+    /** Va a capo per parole entro [maxWidth] (larghezza stimata di Helvetica). */
+    private fun wrap(text: String, size: Float, maxWidth: Float): List<String> {
+        val maxChars = (maxWidth / (size * 0.5f)).toInt().coerceAtLeast(10)
+        val out = ArrayList<String>()
+        for (para in text.lines()) {
+            if (para.isBlank()) { out += ""; continue }
+            var line = StringBuilder()
+            for (word in para.split(' ')) {
+                if (line.isNotEmpty() && line.length + 1 + word.length > maxChars) { out += line.toString(); line = StringBuilder() }
+                var w = word
+                while (w.length > maxChars) { out += w.take(maxChars); w = w.drop(maxChars) }
+                if (line.isNotEmpty()) line.append(' ')
+                line.append(w)
+            }
+            out += line.toString()
+        }
+        return out
+    }
+
     fun write(c: Context, s: Session, r: Release, user: String, file: File, onProgress: (Float) -> Unit) {
         BufferedOutputStream(FileOutputStream(file)).use { os ->
             val out = Out(os)
@@ -151,7 +175,25 @@ object PdfReport {
             line("Cartella: ${r.folder}")
             if (user.isNotBlank()) line("Redatto da: $user")
             cover.text(false, 9f, MARGIN, MARGIN, "Generato con Pastashoot", 0.4f)
-            page(A4_SHORT, A4_LONG, cover, null)
+
+            // nota generale, sulla copertina e se serve sulle pagine seguenti
+            var pageContent = cover
+            if (r.note.isNotBlank()) {
+                y -= 16f
+                pageContent.text(true, 13f, MARGIN, y, "Note generali")
+                y -= 22f
+                for (ln in wrap(r.note.trim(), 11f, cw)) {
+                    if (y < MARGIN + 24f) {
+                        page(A4_SHORT, A4_LONG, pageContent, null)
+                        pageContent = Content()
+                        pageContent.text(true, 10f, MARGIN, A4_LONG - MARGIN - 8f, "${s.name.take(60)} · Note generali (continua)")
+                        y = A4_LONG - MARGIN - 40f
+                    }
+                    pageContent.text(false, 11f, MARGIN, y, ln)
+                    y -= 15f
+                }
+            }
+            page(A4_SHORT, A4_LONG, pageContent, null)
 
             // --- una foto per pagina ---
             val total = r.items.size

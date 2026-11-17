@@ -130,9 +130,10 @@ fun ToolIcon(
     onClick: () -> Unit,
     enabled: Boolean = true,
     selected: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
-    if (selected) FilledTonalIconButton(onClick, enabled = enabled, shape = SmallCorners) { Icon(icon, description) }
-    else IconButton(onClick, enabled = enabled) { Icon(icon, description) }
+    if (selected) FilledTonalIconButton(onClick, modifier, enabled = enabled, shape = SmallCorners) { Icon(icon, description) }
+    else IconButton(onClick, modifier, enabled = enabled) { Icon(icon, description) }
 }
 
 /** Azione testuale della barra superiore: pulsante pieno se principale. */
@@ -386,6 +387,63 @@ fun PromptDialog(
         confirmButton = { TextButton({ onConfirm(text.trim()) }, enabled = text.isNotBlank()) { Text(confirm) } },
         dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
     )
+}
+
+/** Dialogo per un testo lungo (es. la nota generale del sopralluogo). */
+@Composable
+fun TextDialog(
+    title: String,
+    message: String,
+    initial: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(message, style = MaterialTheme.typography.bodyMedium)
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it }, minLines = 5, maxLines = 12,
+                    placeholder = { Text("Scrivi o detta la nota…") }, shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = { TextButton({ onConfirm(text.trim()) }) { Text("Salva") } },
+        dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
+    )
+}
+
+/** Riquadro informativo colorato, con icona ed eventuale azione. */
+@Composable
+fun InfoBanner(
+    icon: ImageVector,
+    text: String,
+    modifier: Modifier = Modifier,
+    action: String? = null,
+    onAction: () -> Unit = {},
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(cs.secondaryContainer)
+            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(20.dp))
+        Text(
+            text, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer,
+            modifier = Modifier.weight(1f).padding(start = 10.dp, end = 4.dp),
+        )
+        if (action != null) TextButton(onAction) { Text(action) }
+    }
 }
 
 /** Dialogo non chiudibile con l'avanzamento di un'operazione lunga. */

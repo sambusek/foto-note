@@ -32,10 +32,13 @@ class SessionItem(
     val values: Map<String, String> = emptyMap(),
 )
 
-/** Un'emissione: le foto consolidate in una cartella in un certo momento. */
-class Release(val label: String, val folder: String, val time: Long, val items: List<SessionItem>) {
+/** Un'emissione: le foto consolidate in una cartella in un certo momento, con la nota generale di allora. */
+class Release(val label: String, val folder: String, val time: Long, val items: List<SessionItem>, val note: String = "") {
     val relPath: String get() = "Pictures/Pastashoot/$folder"
 }
+
+/** Una pausa della sessione; [end] = 0 se è ancora in corso. */
+data class Pause(val start: Long, val end: Long = 0L)
 
 /**
  * Sessione di sopralluogo. Finché è aperta ([end] = 0) le foto sono quelle scattate da [start]
@@ -58,9 +61,15 @@ data class Session(
     val versions: List<Release> = emptyList(),
     /** Ultimo schema usato per i nomi dei file nello ZIP. */
     val zipPattern: String = "",
+    /** Nota generale del sopralluogo: va nel report PDF e, come testo, nello ZIP. */
+    val generalNote: String = "",
+    /** Pause: le foto scattate durante una pausa non entrano nel sopralluogo. */
+    val pauses: List<Pause> = emptyList(),
 ) {
     val open: Boolean get() = end == 0L
-    val finalRelease: Release? get() = if (open) null else Release("Definitiva", folder, end, items)
+    val paused: Boolean get() = open && pauses.lastOrNull()?.end == 0L
+    fun inPause(ms: Long): Boolean = pauses.any { ms >= it.start && (it.end == 0L || ms <= it.end) }
+    val finalRelease: Release? get() = if (open) null else Release("Definitiva", folder, end, items, generalNote)
     /** Etichetta dell'ultima versione emessa, es. "V02"; null se non ce ne sono. */
     val versionTag: String? get() = if (versions.isEmpty()) null else "V" + versions.size.toString().padStart(2, '0')
 
@@ -107,7 +116,10 @@ private fun Session.toJson(): JSONObject {
     val fl = JSONArray().also { a -> fields.forEach { a.put(it.toJson()) } }
     val vs = JSONArray().also { a ->
         versions.forEach {
-            a.put(JSONObject().put("label", it.label).put("folder", it.folder).put("time", it.time).put("items", it.items.toJson()))
+            a.put(
+                JSONObject().put("label", it.label).put("folder", it.folder).put("time", it.time)
+                    .put("items", it.items.toJson()).put("note", it.note)
+            )
         }
     }
     return JSONObject()
@@ -119,6 +131,8 @@ private fun Session.toJson(): JSONObject {
         .put("items", items.toJson())
         .put("versions", vs)
         .put("zipPattern", zipPattern)
+        .put("generalNote", generalNote)
+        .put("pauses", JSONArray().also { a -> pauses.forEach { a.put(JSONArray().put(it.start).put(it.end)) } })
 }
 
 private fun sessionFromJson(o: JSONObject): Session {
@@ -136,9 +150,16 @@ private fun sessionFromJson(o: JSONObject): Session {
         items = itemsFromJson(o.optJSONArray("items")),
         versions = if (vs == null) emptyList() else (0 until vs.length()).map {
             val x = vs.getJSONObject(it)
-            Release(x.getString("label"), x.getString("folder"), x.getLong("time"), itemsFromJson(x.optJSONArray("items")))
+            Release(
+                x.getString("label"), x.getString("folder"), x.getLong("time"),
+                itemsFromJson(x.optJSONArray("items")), x.optString("note", ""),
+            )
         },
         zipPattern = o.optString("zipPattern", ""),
+        generalNote = o.optString("generalNote", ""),
+        pauses = o.optJSONArray("pauses")?.let { a ->
+            (0 until a.length()).map { val p = a.getJSONArray(it); Pause(p.getLong(0), p.optLong(1, 0L)) }
+        }.orEmpty(),
     )
 }
 
@@ -162,6 +183,13 @@ object SessionStore {
 
     fun remove(c: Context, id: String) {
         file(c, id).delete()
+    }
+
+    /** Mette in pausa la sessione o la riprende. */
+    fun togglePause(c: Context, s: Session): Session {
+        val now = System.currentTimeMillis()
+        val pauses = if (s.paused) s.pauses.dropLast(1) + s.pauses.last().copy(end = now) else s.pauses + Pause(now)
+        return s.copy(pauses = pauses).also { save(c, it) }
     }
 
     /** Nome cartella: YYMMDD_NOME, senza caratteri non ammessi nei nomi di file. */
@@ -189,6 +217,7 @@ object SessionStore {
     fun photos(c: Context, s: Session): List<Photo> {
         if (!MediaHelper.hasPhotoPermission(c)) return emptyList()
         val shot = MediaHelper.cameraPhotosBetween(c.contentResolver, s.start / 1000, if (s.open) null else s.end / 1000)
+            .filter { !s.inPause(it.dateAddedSec * 1000) }
         val shotKeys = shot.map { it.uri.toString() }.toSet()
         val added = s.extra.distinct().filter { it !in shotKeys }.mapNotNull { u ->
             val uri = Uri.parse(u)
@@ -204,7 +233,7 @@ object SessionStore {
         if (uri.toString() in s.extra) return s
         val id = runCatching { ContentUris.parseId(uri) }.getOrNull() ?: return null
         val p = MediaHelper.cameraPhotoById(c.contentResolver, id) ?: return null
-        return if (p.dateAddedSec >= s.start / 1000) s else null
+        return if (p.dateAddedSec >= s.start / 1000 && !s.inPause(p.dateAddedSec * 1000)) s else null
     }
 }
 
@@ -286,7 +315,9 @@ object SessionOps {
                 val a = AnnotationStore.load(c, p.uri)
                 val taken = MediaHelper.takenMillis(c.contentResolver, p.uri)
                 val values = AutoFields.resolve(s.fields, a?.values.orEmpty(), s.name, taken, user)
-                val (out, name) = AnnotationIO.exportTo(c, p.uri, a?.strokes.orEmpty(), a?.note.orEmpty(), relPath, s.fields, values)
+                val (out, name) = AnnotationIO.exportTo(
+                    c, p.uri, a?.strokes.orEmpty(), a?.note.orEmpty(), relPath, s.fields, values, a?.pad ?: Pad(),
+                )
                 items += SessionItem(p.uri.toString(), out.toString(), name, taken, values)
             }.onFailure { errors++ }
             progress = (i + 1f) / photos.size
@@ -305,7 +336,7 @@ object SessionOps {
             val (items, e) = consolidate(c, s, "Pictures/Pastashoot/$folder")
             errors = e
             if (items.isEmpty()) null
-            else Release("Versione $n", folder, System.currentTimeMillis(), items).also {
+            else Release("Versione $n", folder, System.currentTimeMillis(), items, s.generalNote).also {
                 // rilettura: nel frattempo la sessione potrebbe essere cambiata
                 val now = SessionStore.get(c, id) ?: s
                 SessionStore.save(c, now.copy(versions = now.versions + it))
@@ -320,7 +351,12 @@ object SessionOps {
             val s = SessionStore.get(c, id)!!
             val (items, errors) = consolidate(c, s, "Pictures/Pastashoot/${s.folder}")
             if (items.isEmpty() && errors == 0 && s.versions.isEmpty()) SessionStore.remove(c, id)
-            else SessionStore.save(c, s.copy(end = System.currentTimeMillis(), items = items))
+            else {
+                val now = System.currentTimeMillis()
+                // una pausa ancora aperta si chiude con il sopralluogo
+                val pauses = if (s.paused) s.pauses.dropLast(1) + s.pauses.last().copy(end = now) else s.pauses
+                SessionStore.save(c, s.copy(end = now, items = items, pauses = pauses))
+            }
             items.size to errors
         }) { r -> onDone(r?.first ?: 0, r?.second ?: 0) }
     }
@@ -337,11 +373,23 @@ object SessionOps {
             val user = Prefs.userName(c)
             if (pdf) PdfReport.write(c, s, r, user, f) { progress = it }
             else {
-                Exporter.zip(c, r, FileNames.build(pattern, s, r, user), f) { progress = it }
+                Exporter.zip(c, r, FileNames.build(pattern, s, r, user), noteText(s, r, user), f) { progress = it }
                 SessionStore.save(c, s.copy(zipPattern = pattern))
             }
             f
         }, onDone)
+    }
+
+    /** Testo della nota generale da mettere nello ZIP (null se non c'è nota). */
+    private fun noteText(s: Session, r: Release, user: String): String? {
+        if (r.note.isBlank()) return null
+        val fmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY)
+        val head = listOfNotNull(
+            "Sopralluogo: ${s.name}",
+            "Emissione: ${r.label} del ${fmt.format(Date(r.time))}",
+            if (user.isNotBlank()) "Redatto da: $user" else null,
+        )
+        return (head + "" + "NOTA GENERALE" + "" + r.note.trim()).joinToString("\r\n") + "\r\n"
     }
 
     private fun deleteFiles(c: Context, releases: List<Release>) {

@@ -56,6 +56,7 @@ import androidx.core.content.IntentCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
  * Editor di una foto: disegno con l'S Pen e testi. Dentro una sessione in corso salva bozze
@@ -140,6 +141,7 @@ private fun EditorScreen(
     var saving by remember { mutableStateOf(false) }
     var askExit by remember { mutableStateOf(false) }
     var colorMenu by remember { mutableStateOf(false) }
+    var canvasMode by remember { mutableStateOf(false) }   // allargamento della tela
 
     val unsaved = ink.dirty || note != savedNote || vals != savedValues
     val canNav = staging && index >= 0 && total > 1
@@ -158,7 +160,7 @@ private fun EditorScreen(
                 AnnotationIO.loadBitmap(ctx.contentResolver, uri) to AnnotationStore.load(ctx, uri)
             }
             if (saved != null) {
-                ink.restore(saved.strokes)
+                ink.restore(saved.strokes, saved.pad)
                 note = saved.note; savedNote = saved.note
                 values.putAll(saved.values)
                 savedValues = saved.values.filterValues { it.isNotBlank() }
@@ -187,7 +189,8 @@ private fun EditorScreen(
 
     suspend fun saveDraft() {
         val (strokes, text, v) = Triple(ink.strokes, note, vals)
-        withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes, v) }
+        val pad = ink.pad
+        withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes, v, pad) }
         ink.dirty = false; savedNote = text; savedValues = v
     }
 
@@ -201,7 +204,8 @@ private fun EditorScreen(
                 return@runSave
             }
             val text = note
-            val out = withContext(Dispatchers.IO) { AnnotationIO.save(ctx, uri, bmp, ink.strokes, text) }
+            val (strokes, pad) = ink.strokes to ink.pad
+            val out = withContext(Dispatchers.IO) { AnnotationIO.save(ctx, uri, bmp, strokes, text, pad) }
             ink.dirty = false; savedNote = text
             if (share) {
                 val send = Intent(Intent.ACTION_SEND).setType("image/jpeg")
@@ -242,43 +246,60 @@ private fun EditorScreen(
             ToolIcon(AppIcons.Redo, "Ripeti", { ink.redo() }, enabled = ink.canRedo)
             if (!staging) ToolIcon(AppIcons.Share, "Condividi", { save(true) }, enabled = ready)
             BarAction("Salva", { save(false) }, primary = true, enabled = ready)
+            OverflowMenu(
+                listOfNotNull(
+                    if (ink.strokes.isNotEmpty()) "Cancella tutti i tratti" to { ink.clearAll() } else null,
+                    if (!ink.pad.isZero) "Togli lo spazio bianco" to { ink.setPad(Pad()) } else null,
+                    (if (canvasMode) "Torna al disegno" else "Allarga la tela…") to { canvasMode = !canvasMode },
+                )
+            )
         },
         bottomBar = {
-            // barra degli strumenti: una sola riga di icone
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (canNav) NavButton(AppIcons.Prev, "Foto precedente", { go(-1) }, enabled = index > 0)
-                Box {
-                    IconButton({ colorMenu = true }) { Swatch(ink.color, size = 22) }
-                    DropdownMenu(expanded = colorMenu, onDismissRequest = { colorMenu = false }) {
-                        Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (c in PALETTE) {
-                                Box(Modifier.clickable { ink.color = c; ink.eraser = false; colorMenu = false }) {
-                                    Swatch(c, size = 34, selected = c == ink.color)
+            Column {
+                if (canvasMode) InfoBanner(
+                    AppIcons.Expand,
+                    "Trascina i bordi o le maniglie per aggiungere spazio bianco attorno alla foto. " +
+                        "Tocca di nuovo l'icona per tornare a disegnare.",
+                    action = if (ink.pad.isZero) null else "Azzera",
+                    onAction = { ink.setPad(Pad()) },
+                )
+                // barra degli strumenti: una sola riga di icone
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 2.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val tool = Modifier.size(44.dp)
+                    if (canNav) NavButton(AppIcons.Prev, "Foto precedente", { go(-1) }, enabled = index > 0)
+                    Box {
+                        IconButton({ colorMenu = true }, tool) { Swatch(ink.color, size = 22) }
+                        DropdownMenu(expanded = colorMenu, onDismissRequest = { colorMenu = false }) {
+                            Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                for (c in PALETTE) {
+                                    Box(Modifier.clickable { ink.color = c; ink.eraser = false; colorMenu = false }) {
+                                        Swatch(c, size = 34, selected = c == ink.color)
+                                    }
                                 }
                             }
                         }
                     }
+                    val wIdx = WIDTHS.indexOf(ink.widthFactor).coerceAtLeast(0)
+                    IconButton({ ink.widthFactor = WIDTHS[(wIdx + 1) % WIDTHS.size] }, tool) {
+                        val d = listOf(6.dp, 10.dp, 16.dp)[wIdx]
+                        Box(Modifier.size(d).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant))
+                    }
+                    ToolIcon(AppIcons.Eraser, "Gomma", { ink.eraser = !ink.eraser }, selected = ink.eraser, modifier = tool)
+                    ToolIcon(
+                        AppIcons.Touch, "Disegna anche con il dito",
+                        { stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly) }, selected = !stylusOnly, modifier = tool,
+                    )
+                    ToolIcon(AppIcons.Notes, "Testi", { textsOpen = !textsOpen }, selected = textsOpen, modifier = tool)
+                    ToolIcon(AppIcons.Expand, "Allarga la tela", { canvasMode = !canvasMode }, selected = canvasMode, modifier = tool)
+                    if (canNav) NavButton(AppIcons.Next, "Foto successiva", { go(1) }, enabled = index < total - 1)
                 }
-                val wIdx = WIDTHS.indexOf(ink.widthFactor).coerceAtLeast(0)
-                IconButton({ ink.widthFactor = WIDTHS[(wIdx + 1) % WIDTHS.size] }) {
-                    val d = listOf(6.dp, 10.dp, 16.dp)[wIdx]
-                    Box(Modifier.size(d).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant))
-                }
-                ToolIcon(AppIcons.Eraser, "Gomma", { ink.eraser = !ink.eraser }, selected = ink.eraser)
-                ToolIcon(
-                    AppIcons.Touch, "Disegna anche con il dito",
-                    { stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly) }, selected = !stylusOnly,
-                )
-                ToolIcon(AppIcons.Notes, "Testi", { textsOpen = !textsOpen }, selected = textsOpen)
-                ToolIcon(AppIcons.Delete, "Cancella i tratti", { ink.clearAll() }, enabled = ink.strokes.isNotEmpty())
-                if (canNav) NavButton(AppIcons.Next, "Foto successiva", { go(1) }, enabled = index < total - 1)
             }
         },
     ) {
@@ -294,13 +315,15 @@ private fun EditorScreen(
                 else -> {
                     val image = remember(bmp) { bmp.asImageBitmap() }
                     // anteprima dei testi, come verranno stampati
-                    val overlay = remember(note, vals, bmp, takenMillis) {
+                    val pad = ink.pad
+                    val overlay = remember(note, vals, bmp, takenMillis, pad) {
                         Overlay.create(
                             note, fields, AutoFields.resolve(fields, vals, session?.name.orEmpty(), takenMillis, Prefs.userName(ctx)),
-                            bmp.width, bmp.height,
+                            bmp.width + pad.l.roundToInt() + pad.r.roundToInt(),
+                            bmp.height + pad.t.roundToInt() + pad.b.roundToInt(),
                         )
                     }
-                    InkCanvas(image, ink, stylusOnly, overlay, onSwipe = ::go)
+                    InkCanvas(image, ink, stylusOnly, overlay, canvasMode = canvasMode, onSwipe = if (canvasMode) null else ::go)
                 }
             }
             if (saving) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
@@ -333,7 +356,7 @@ private fun EditorScreen(
 /** Pulsante per passare alla foto precedente o successiva: pieno nel colore d'accento. */
 @Composable
 private fun NavButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean) =
-    FilledIconButton(onClick, enabled = enabled, shape = RoundedCornerShape(6.dp)) { Icon(icon, description) }
+    FilledIconButton(onClick, Modifier.size(44.dp), enabled = enabled, shape = RoundedCornerShape(6.dp)) { Icon(icon, description) }
 
 @Composable
 private fun FieldLabel(text: String, modifier: Modifier = Modifier) = Text(

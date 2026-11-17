@@ -247,6 +247,7 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                     Spacer(Modifier.width(8.dp))
                     Text(active.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
                     active.versionTag?.let { Tag(it) }
+                    if (active.paused) Tag("In pausa", strong = true)
                 }
                 Caption("Iniziata il ${dayTime.format(Date(active.start))} · $activeCount foto")
                 Spacer(Modifier.height(10.dp))

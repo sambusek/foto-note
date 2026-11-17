@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import kotlin.math.roundToInt
+import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.net.Uri
@@ -30,6 +32,8 @@ class SavedAnnotation(
     val outUri: Uri?,
     /** Valori dei campi del layout di sessione (id del campo → testo). */
     val values: Map<String, String> = emptyMap(),
+    /** Spazio bianco aggiunto attorno alla foto (modalità tela). */
+    val pad: Pad = Pad(),
 )
 
 object AnnotationStore {
@@ -60,6 +64,9 @@ object AnnotationStore {
                 o.optJSONObject("values")?.let { v ->
                     v.keys().asSequence().associateWith { k -> v.optString(k, "") }
                 } ?: emptyMap(),
+                o.optJSONArray("pad")?.let { a ->
+                    Pad(a.optDouble(0).toFloat(), a.optDouble(1).toFloat(), a.optDouble(2).toFloat(), a.optDouble(3).toFloat())
+                } ?: Pad(),
             )
         }
     } catch (e: Exception) {
@@ -68,16 +75,17 @@ object AnnotationStore {
 
     /**
      * Bozza: salva tratti e testi sulla foto senza produrre alcun file (staging di sessione).
-     * Con [values] nullo i valori dei campi già salvati restano come sono.
+     * Con [values] o [pad] nulli restano quelli già salvati.
      */
     fun saveDraft(
-        c: Context, src: Uri, note: String, strokes: List<Stroke>, values: Map<String, String>? = null,
-    ) = save(c, src, note, strokes, load(c, src)?.outUri, values)
+        c: Context, src: Uri, note: String, strokes: List<Stroke>,
+        values: Map<String, String>? = null, pad: Pad? = null,
+    ) = save(c, src, note, strokes, load(c, src)?.outUri, values, pad)
 
     /** Vero se sulla foto ci sono tratti o testi. */
     fun hasContent(c: Context, src: Uri): Boolean {
         val a = load(c, src) ?: return false
-        return a.strokes.isNotEmpty() || a.note.isNotBlank() || a.values.values.any { it.isNotBlank() }
+        return a.strokes.isNotEmpty() || a.note.isNotBlank() || a.values.values.any { it.isNotBlank() } || !a.pad.isZero
     }
 
     fun remove(c: Context, src: Uri) {
@@ -87,8 +95,11 @@ object AnnotationStore {
     fun save(
         c: Context, src: Uri, note: String, strokes: List<Stroke>, out: Uri?,
         values: Map<String, String>? = null,
+        pad: Pad? = null,
     ) {
-        val vals = (values ?: load(c, src)?.values ?: emptyMap()).filterValues { it.isNotBlank() }
+        val old = if (values == null || pad == null) load(c, src) else null
+        val vals = (values ?: old?.values ?: emptyMap()).filterValues { it.isNotBlank() }
+        val pd = pad ?: old?.pad ?: Pad()
         val arr = JSONArray()
         for (s in strokes) {
             val p = JSONArray()
@@ -100,6 +111,7 @@ object AnnotationStore {
             .put("out", out?.toString() ?: "")
             .put("note", note)
             .put("values", JSONObject(vals as Map<*, *>))
+            .put("pad", JSONArray(listOf(pd.l.toDouble(), pd.t.toDouble(), pd.r.toDouble(), pd.b.toDouble())))
             .put("updated", System.currentTimeMillis())
             .put("strokes", arr)
         file(c, src).writeText(o.toString())
@@ -144,16 +156,22 @@ object AnnotationIO {
     fun render(
         base: Bitmap, strokes: List<Stroke>, note: String = "",
         fields: List<NoteField> = emptyList(), values: Map<String, String> = emptyMap(),
+        pad: Pad = Pad(),
     ): Bitmap {
-        val overlay = Overlay.create(note, fields, values, base.width, base.height)
-        val out = Bitmap.createBitmap(
-            base.width, overlay.topH + base.height + overlay.bottomH, Bitmap.Config.ARGB_8888
-        )
+        // tela: la foto più lo spazio bianco aggiunto attorno
+        val (l, t) = pad.l.roundToInt() to pad.t.roundToInt()
+        val cw = base.width + l + pad.r.roundToInt()
+        val ch = base.height + t + pad.b.roundToInt()
+        val overlay = Overlay.create(note, fields, values, cw, ch)
+        val out = Bitmap.createBitmap(cw, overlay.topH + ch + overlay.bottomH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
-        // da qui in poi l'origine è l'angolo in alto a sinistra della foto
+        // origine nell'angolo in alto a sinistra della tela
         canvas.translate(0f, overlay.topH.toFloat())
+        if (!pad.isZero) canvas.drawRect(0f, 0f, cw.toFloat(), ch.toFloat(), Paint().apply { color = Color.WHITE })
+        overlay.draw(canvas, ch.toFloat())
+        // da qui in poi l'origine è l'angolo in alto a sinistra della foto
+        canvas.translate(l.toFloat(), t.toFloat())
         canvas.drawBitmap(base, 0f, 0f, null)
-        overlay.draw(canvas, base.height.toFloat())
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
@@ -181,10 +199,10 @@ object AnnotationIO {
      * Salva la copia annotata in Immagini/Pastashoot (l'originale non viene toccato),
      * scrive la nota nei metadati e memorizza tratti e nota per modifiche future.
      */
-    fun save(c: Context, src: Uri, base: Bitmap, strokes: List<Stroke>, note: String): Uri {
+    fun save(c: Context, src: Uri, base: Bitmap, strokes: List<Stroke>, note: String, pad: Pad = Pad()): Uri {
         val cr = c.contentResolver
         val tmp = File(c.cacheDir, "annotata.jpg")
-        val rendered = render(base, strokes, note)
+        val rendered = render(base, strokes, note, pad = pad)
         FileOutputStream(tmp).use { rendered.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         rendered.recycle()
         writeExif(c, src, tmp, note)
@@ -217,7 +235,7 @@ object AnnotationIO {
         }
         try { cr.update(result, done, null, null) } catch (_: Exception) {}
         tmp.delete()
-        AnnotationStore.save(c, src, note, strokes, result)
+        AnnotationStore.save(c, src, note, strokes, result, pad = pad)
         return result
     }
 
@@ -229,6 +247,7 @@ object AnnotationIO {
     fun exportTo(
         c: Context, src: Uri, strokes: List<Stroke>, note: String, relPath: String,
         fields: List<NoteField> = emptyList(), values: Map<String, String> = emptyMap(),
+        pad: Pad = Pad(),
     ): Pair<Uri, String> {
         val desc = Overlay.describe(note, fields, values)
         val cr = c.contentResolver
@@ -237,7 +256,7 @@ object AnnotationIO {
         val tmp = File(c.cacheDir, "export.tmp")
         val mime: String
         val name: String
-        if (strokes.isEmpty() && desc.isEmpty()) {
+        if (strokes.isEmpty() && desc.isEmpty() && pad.isZero) {
             mime = cr.getType(src) ?: "image/jpeg"
             name = orig ?: "$stamp.jpg"
             val hasLocation = ContextCompat.checkSelfPermission(
@@ -251,7 +270,7 @@ object AnnotationIO {
             mime = "image/jpeg"
             name = (orig?.substringBeforeLast('.') ?: stamp) + ".jpg"
             val base = loadBitmap(cr, src)
-            val rendered = render(base, strokes, note, fields, values)
+            val rendered = render(base, strokes, note, fields, values, pad)
             base.recycle()
             FileOutputStream(tmp).use { rendered.compress(Bitmap.CompressFormat.JPEG, 92, it) }
             rendered.recycle()
