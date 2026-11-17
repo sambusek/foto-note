@@ -555,6 +555,12 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
                     "aggiungi Pastashoot alle \"App mai in sospensione\".",
                 Modifier.padding(top = 14.dp),
             )
+            Text(
+                "Ideatore dell'app: Mauro Sullam",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 10.dp, start = 2.dp),
+            )
         }
     }
 }
