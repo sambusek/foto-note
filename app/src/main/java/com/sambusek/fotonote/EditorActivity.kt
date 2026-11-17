@@ -292,7 +292,7 @@ private fun EditorScreen(
                     // anteprima dei testi, come verranno stampati
                     val overlay = remember(note, vals, bmp, takenMillis) {
                         Overlay.create(
-                            note, fields, AutoFields.resolve(fields, vals, session?.name.orEmpty(), takenMillis),
+                            note, fields, AutoFields.resolve(fields, vals, session?.name.orEmpty(), takenMillis, Prefs.userName(ctx)),
                             bmp.width, bmp.height,
                         )
                     }

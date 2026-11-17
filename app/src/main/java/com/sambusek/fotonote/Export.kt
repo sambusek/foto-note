@@ -19,24 +19,25 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 object Exporter {
-    /** ZIP con tutte le foto consolidate della sessione, dentro una cartella col suo nome. */
-    fun zip(c: Context, s: Session, out: File, onProgress: (Float) -> Unit) {
+    /** ZIP con le foto di un'emissione, dentro una cartella col suo nome, chiamate come [names]. */
+    fun zip(c: Context, r: Release, names: List<String>, out: File, onProgress: (Float) -> Unit) {
         val used = HashSet<String>()
         ZipOutputStream(BufferedOutputStream(FileOutputStream(out))).use { zos ->
             zos.setLevel(0) // i JPEG sono già compressi
-            s.items.forEachIndexed { i, item ->
-                var name = item.name
+            r.items.forEachIndexed { i, item ->
+                val wanted = names.getOrNull(i) ?: item.name
+                var name = wanted
                 var n = 2
-                while (!used.add(name)) {
-                    name = item.name.substringBeforeLast('.') + "_${n++}." + item.name.substringAfterLast('.', "jpg")
+                while (!used.add(name.lowercase())) {
+                    name = wanted.substringBeforeLast('.') + "_${n++}." + wanted.substringAfterLast('.', "jpg")
                 }
                 val input = runCatching { c.contentResolver.openInputStream(Uri.parse(item.out)) }.getOrNull()
                 if (input != null) {
-                    zos.putNextEntry(ZipEntry("${s.folder}/$name"))
+                    zos.putNextEntry(ZipEntry("${r.folder}/$name"))
                     input.use { it.copyTo(zos) }
                     zos.closeEntry()
                 }
-                onProgress((i + 1f) / s.items.size)
+                onProgress((i + 1f) / r.items.size)
             }
         }
     }
@@ -99,7 +100,7 @@ object PdfReport {
         return if (w <= maxWidth) size else size * maxWidth / w
     }
 
-    fun write(c: Context, s: Session, file: File, onProgress: (Float) -> Unit) {
+    fun write(c: Context, s: Session, r: Release, user: String, file: File, onProgress: (Float) -> Unit) {
         BufferedOutputStream(FileOutputStream(file)).use { os ->
             val out = Out(os)
             val offsets = HashMap<Int, Long>()
@@ -142,16 +143,19 @@ object PdfReport {
             cover.text(false, 11f, MARGIN, 700f, "REPORT DI SOPRALLUOGO", 0.4f)
             cover.text(true, fit(s.name, 30f, cw), MARGIN, 660f, s.name)
             cover.line(MARGIN, 640f, A4_SHORT - MARGIN)
-            cover.text(false, 13f, MARGIN, 612f, "Data: ${dayFmt.format(Date(s.start))}")
-            cover.text(false, 13f, MARGIN, 592f, "Orario: ${timeFmt.format(Date(s.start))} - ${timeFmt.format(Date(s.end))}")
-            cover.text(false, 13f, MARGIN, 572f, "Foto: ${s.items.size}")
-            cover.text(false, 13f, MARGIN, 552f, "Cartella: ${s.folder}")
+            var y = 612f
+            fun line(t: String) { cover.text(false, 13f, MARGIN, y, t); y -= 20f }
+            line("Emissione: ${r.label} del ${dayFmt.format(Date(r.time))}, ${timeFmt.format(Date(r.time))}")
+            line("Sopralluogo iniziato il ${dayFmt.format(Date(s.start))}, ${timeFmt.format(Date(s.start))}")
+            line("Foto: ${r.items.size}")
+            line("Cartella: ${r.folder}")
+            if (user.isNotBlank()) line("Redatto da: $user")
             cover.text(false, 9f, MARGIN, MARGIN, "Generato con Pastashoot", 0.4f)
             page(A4_SHORT, A4_LONG, cover, null)
 
             // --- una foto per pagina ---
-            val total = s.items.size
-            s.items.forEachIndexed { i, item ->
+            val total = r.items.size
+            r.items.forEachIndexed { i, item ->
                 val bmp = runCatching {
                     AnnotationIO.loadBitmap(c.contentResolver, Uri.parse(item.out), IMG_MAX_SIDE)
                 }.getOrNull()
@@ -172,7 +176,7 @@ object PdfReport {
                     val pw = if (landscape) A4_LONG else A4_SHORT
                     val ph = if (landscape) A4_SHORT else A4_LONG
                     val ct = Content()
-                    ct.text(true, 10f, MARGIN, ph - MARGIN - 8f, s.name.take(70))
+                    ct.text(true, 10f, MARGIN, ph - MARGIN - 8f, "${s.name.take(60)} · ${r.label}")
                     ct.text(false, 10f, pw - MARGIN - 60f, ph - MARGIN - 8f, "${i + 1} / $total", 0.3f)
                     ct.text(false, 8f, MARGIN, MARGIN - 6f, item.name, 0.4f)
                     val boxW = pw - 2 * MARGIN

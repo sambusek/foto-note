@@ -30,6 +30,7 @@ enum class FieldKind(
     DATE("Data dello scatto", "Automatico: la data della foto", "Data", FieldPos.TL),
     TIME("Ora dello scatto", "Automatico: l'ora della foto", "Ora", FieldPos.TL),
     SESSION("Nome del sopralluogo", "Automatico: il nome di questa sessione", "Sopralluogo", FieldPos.TOP),
+    USER("Nome utente", "Automatico: il tuo nome, impostato nell'app", "Redatto da", FieldPos.BR),
     FIXED("Etichetta fissa", "Automatico: lo stesso testo su tutte le foto", "Etichetta", FieldPos.TR);
 
     /** Vero per i campi che si compilano da soli su tutte le foto. */
@@ -59,6 +60,7 @@ data class NoteField(
 object AutoFields {
     fun resolve(
         fields: List<NoteField>, values: Map<String, String>, sessionName: String, takenMillis: Long,
+        userName: String,
     ): Map<String, String> {
         if (fields.none { it.auto }) return values
         val out = values.toMutableMap()
@@ -68,6 +70,7 @@ object AutoFields {
             FieldKind.DATE -> out[f.id] = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ITALY).format(date)
             FieldKind.TIME -> out[f.id] = java.text.SimpleDateFormat("HH:mm", java.util.Locale.ITALY).format(date)
             FieldKind.SESSION -> out[f.id] = sessionName
+            FieldKind.USER -> out[f.id] = userName
             FieldKind.FIXED -> out[f.id] = f.text
         }
         return out

@@ -13,6 +13,9 @@ object Prefs {
     fun autoOpen(c: Context) = sp(c).getBoolean("auto_open", false)
     fun setAutoOpen(c: Context, v: Boolean) = sp(c).edit().putBoolean("auto_open", v).apply()
 
+    fun userName(c: Context): String = sp(c).getString("user_name", "").orEmpty()
+    fun setUserName(c: Context, v: String) = sp(c).edit().putString("user_name", v.trim()).apply()
+
     fun stylusOnly(c: Context) = sp(c).getBoolean("stylus_only", true)
     fun setStylusOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("stylus_only", v).apply()
 }

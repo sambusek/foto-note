@@ -85,3 +85,17 @@ su tutte le foto della sessione senza doverli compilare.
 
 **Tipi di campo**: testo libero, elenco di scelte (es. "Piano" con "P3, P4": nell'editor si sceglie dal menu ▾,
 oppure si scrive), data e ora dello scatto, nome del sopralluogo, etichetta fissa.
+
+## Versioni e consolidamento
+
+Durante il sopralluogo **Emetti versione** salva lo stato attuale (disegni e testi) in
+`Immagini/Pastashoot/YYMMDD_NOME_v01`, `_v02`… senza chiudere la sessione: si può condividerne ZIP o PDF e
+poi continuare a modificare. **Consolida definitivo** salva in `YYMMDD_NOME` e chiude le modifiche.
+"Versioni emesse" elenca tutte le emissioni, ciascuna con il suo ZIP e PDF.
+
+**Nomi nello ZIP**: prima di creare lo ZIP si sceglie uno schema con segnaposto, es. `{N}_{Piano}_{Stanza}`
+(campi del layout, `{N}` progressivo, `{Originale}`, `{Sopralluogo}`, `{Utente}`, `{Data}`, `{Ora}`).
+I valori sono quelli registrati al momento dell'emissione.
+
+**Nome utente**: chiesto alla prima apertura; compare nel saluto, nei report PDF e nel campo automatico
+"Nome utente".

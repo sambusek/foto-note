@@ -7,6 +7,17 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -74,7 +85,7 @@ class SessionActivity : ComponentActivity() {
     }
 }
 
-private val closedFmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY)
+private val dateTimeFmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY)
 
 @Composable
 private fun SessionScreen(id: String, tick: MutableIntState, onClose: () -> Unit) {
@@ -120,6 +131,8 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     var multiOpen by remember { mutableStateOf(false) }
     var askClose by remember { mutableStateOf(false) }
     var askDiscard by remember { mutableStateOf(false) }
+    var askVersion by remember { mutableStateOf(false) }
+    var showReleases by remember { mutableStateOf(false) }
 
     fun endSelection() { selecting = false; selected.clear() }
 
@@ -130,6 +143,10 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
             onDone = { SessionStore.save(ctx, s.copy(fields = it)); layoutEdit = false; refresh() },
             onCancel = { layoutEdit = false },
         )
+        return
+    }
+    if (showReleases) {
+        ReleasesScreen(s, onBack = { showReleases = false })
         return
     }
     if (picking) {
@@ -149,8 +166,9 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
 
     if (askDiscard) ConfirmDialog(
         title = "Eliminare la sessione senza salvare?",
-        text = "Il sopralluogo \"${s.name}\" e le annotazioni fatte finora andranno persi. " +
-            "Le foto originali restano nella Galleria.",
+        text = "Il sopralluogo \"${s.name}\" e le annotazioni fatte finora andranno persi" +
+            (if (s.versions.isNotEmpty()) ", insieme alle ${s.versions.size} versioni emesse" else "") +
+            ". Le foto originali restano nella Galleria.",
         confirm = "Elimina",
         onConfirm = {
             askDiscard = false
@@ -162,22 +180,45 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
         onDismiss = { askDiscard = false },
     )
 
+    if (askVersion) ConfirmDialog(
+        title = "Emettere la versione ${s.versions.size + 1}?",
+        text = "Le $included foto verranno salvate con disegni e testi attuali in Immagini › Pastashoot › " +
+            "${s.folder}_v${(s.versions.size + 1).toString().padStart(2, '0')}. " +
+            "Potrai continuare a modificarle ed emettere altre versioni.",
+        confirm = "Emetti",
+        onConfirm = {
+            askVersion = false
+            SessionOps.emitVersion(ctx, s.id) { r, errors ->
+                val msg = when {
+                    r == null -> "Nessuna foto salvata"
+                    errors == 0 -> "${r.label} emessa: ${r.items.size} foto"
+                    else -> "${r.label} emessa: ${r.items.size} foto, $errors non riuscite"
+                }
+                Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+                refresh()
+                if (r != null) showReleases = true
+            }
+        },
+        dismiss = "Annulla",
+        onDismiss = { askVersion = false },
+    )
+
     if (askClose) ConfirmDialog(
-        title = if (included == 0) "Chiudere il sopralluogo senza foto?" else "Chiudere il sopralluogo?",
-        text = if (included == 0) "Non ci sono foto da salvare: la sessione verrà eliminata."
-        else "Le $included foto verranno salvate con le annotazioni in Immagini › Pastashoot › ${s.folder}. " +
-            "Dopo la chiusura non si potranno più modificare.",
-        confirm = "Chiudi",
+        title = "Consolidamento definitivo?",
+        text = if (included == 0) "Non ci sono foto da salvare: la sessione verrà chiusa senza foto."
+        else "Le $included foto verranno salvate con disegni e testi in Immagini › Pastashoot › ${s.folder}. " +
+            "Dopo il consolidamento non si potranno più modificare. Le versioni già emesse restano.",
+        confirm = "Consolida",
         onConfirm = {
             askClose = false
             SessionOps.close(ctx, s.id) { saved, errors ->
                 val msg = when {
-                    saved == 0 && errors == 0 -> "Sessione vuota eliminata"
-                    errors == 0 -> "Sopralluogo chiuso: $saved foto salvate"
-                    else -> "Sopralluogo chiuso: $saved foto salvate, $errors non riuscite"
+                    saved == 0 && errors == 0 -> "Sopralluogo chiuso senza foto"
+                    errors == 0 -> "Consolidamento definitivo: $saved foto salvate"
+                    else -> "Consolidamento definitivo: $saved foto salvate, $errors non riuscite"
                 }
                 Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
-                if (saved == 0 && errors == 0) onClose() else refresh()
+                if (saved == 0 && errors == 0 && s.versions.isEmpty()) onClose() else refresh()
             }
         },
         dismiss = "Annulla",
@@ -233,7 +274,8 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                 ToolIcon(AppIcons.Camera, "Fotocamera", { openCamera(ctx) })
                 ToolIcon(AppIcons.TextFields, "Testo su più foto", { selecting = true }, enabled = included > 0)
                 OverflowMenu(
-                    listOf(
+                    listOfNotNull(
+                        if (s.versions.isNotEmpty()) "Versioni emesse (${s.versions.size})…" to { showReleases = true } else null,
                         "Aggiungi foto già scattate…" to { picking = true },
                         "Layout delle note…" to { layoutEdit = true },
                         "Elimina sessione…" to { askDiscard = true },
@@ -244,10 +286,10 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
         bottomBar = {
             if (!selecting) Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Caption("Tocca una foto per annotarla, tienila premuta per escluderla.")
-                AppButton(
-                    "Chiudi sopralluogo e salva", { askClose = true }, primary = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                )
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppButton("Emetti versione", { askVersion = true }, Modifier.weight(1f), enabled = included > 0)
+                    AppButton("Consolida definitivo", { askClose = true }, Modifier.weight(1f), primary = true)
+                }
             }
         },
     ) {
@@ -319,11 +361,19 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
 private fun ClosedScreen(s: Session, onClose: () -> Unit) {
     val ctx = LocalContext.current
     var askDelete by remember { mutableStateOf(false) }
+    var showReleases by remember { mutableStateOf(false) }
+    val export = rememberExport(s)
+
+    if (showReleases) {
+        ReleasesScreen(s, onBack = { showReleases = false })
+        return
+    }
 
     if (askDelete) ConfirmDialog(
         title = "Eliminare questo sopralluogo?",
-        text = "Verranno eliminate le ${s.items.size} foto della cartella ${s.folder}. " +
-            "Le foto originali della fotocamera restano nella Galleria.",
+        text = "Verranno eliminate le foto della cartella ${s.folder}" +
+            (if (s.versions.isNotEmpty()) " e delle ${s.versions.size} versioni emesse" else "") +
+            ". Le foto originali della fotocamera restano nella Galleria.",
         confirm = "Elimina",
         onConfirm = {
             askDelete = false
@@ -335,31 +385,31 @@ private fun ClosedScreen(s: Session, onClose: () -> Unit) {
         onDismiss = { askDelete = false },
     )
 
-    fun export(pdf: Boolean) = SessionOps.export(ctx, s.id, pdf) { f ->
-        if (f == null) Toast.makeText(ctx, "Non sono riuscito a creare il file", Toast.LENGTH_LONG).show()
-        else Exporter.share(
-            ctx, f, if (pdf) "application/pdf" else "application/zip",
-            if (pdf) "Condividi il report PDF" else "Condividi lo ZIP",
-        )
-    }
-
     fun view(uri: Uri) = runCatching {
         ctx.startActivity(
             Intent(Intent.ACTION_VIEW).setDataAndType(uri, "image/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         )
     }.onFailure { Toast.makeText(ctx, "Nessuna app per aprire la foto", Toast.LENGTH_SHORT).show() }
 
+    val final = s.finalRelease!!
     AppScreen(
         title = s.folder,
-        subtitle = "${s.items.size} foto · chiuso il ${closedFmt.format(Date(s.end))}",
+        subtitle = "Definitiva · ${s.items.size} foto · ${dateTimeFmt.format(Date(s.end))}",
         onBack = onClose,
-        actions = { OverflowMenu(listOf("Elimina sopralluogo…" to { askDelete = true })) },
+        actions = {
+            OverflowMenu(
+                listOfNotNull(
+                    if (s.versions.isNotEmpty()) "Versioni emesse (${s.versions.size})…" to { showReleases = true } else null,
+                    "Elimina sopralluogo…" to { askDelete = true },
+                )
+            )
+        },
         bottomBar = {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Caption("Immagini › Pastashoot › ${s.folder}")
                 Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppButton("ZIP", { export(false) }, Modifier.weight(1f))
-                    AppButton("Report PDF", { export(true) }, Modifier.weight(1f), primary = true)
+                    AppButton("ZIP…", { export(final, false) }, Modifier.weight(1f), enabled = final.items.isNotEmpty())
+                    AppButton("Report PDF", { export(final, true) }, Modifier.weight(1f), primary = true, enabled = final.items.isNotEmpty())
                 }
             }
         },
@@ -377,4 +427,98 @@ private fun ClosedScreen(s: Session, onClose: () -> Unit) {
             }
         }
     }
+}
+
+// ------------------------------------------------------------------ emissioni ed export
+
+/** Elenco delle emissioni (definitiva e versioni), ciascuna con ZIP e PDF. */
+@Composable
+private fun ReleasesScreen(s: Session, onBack: () -> Unit) {
+    BackHandler { onBack() }
+    val export = rememberExport(s)
+    AppScreen("Versioni emesse", subtitle = s.name, onBack = onBack) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 16.dp)) {
+            if (s.releases.isEmpty()) CenterMessage("Nessuna versione emessa.", Modifier.fillMaxWidth())
+            s.releases.forEachIndexed { i, r ->
+                if (i > 0) ListDivider()
+                Column(Modifier.padding(vertical = 10.dp)) {
+                    Text(r.label, style = MaterialTheme.typography.titleMedium)
+                    Caption("${dateTimeFmt.format(Date(r.time))} · ${r.items.size} foto")
+                    Caption("Immagini › Pastashoot › ${r.folder}")
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppButton("ZIP…", { export(r, false) }, Modifier.weight(1f), enabled = r.items.isNotEmpty())
+                        AppButton("Report PDF", { export(r, true) }, Modifier.weight(1f), primary = true, enabled = r.items.isNotEmpty())
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Restituisce l'azione "esporta un'emissione": il PDF parte subito, lo ZIP chiede prima
+ * come chiamare i file.
+ */
+@Composable
+private fun rememberExport(s: Session): (Release, Boolean) -> Unit {
+    val ctx = LocalContext.current
+    var zipFor by remember { mutableStateOf<Release?>(null) }
+
+    fun doExport(r: Release, pdf: Boolean, pattern: String) = SessionOps.export(ctx, s.id, r.folder, pdf, pattern) { f ->
+        if (f == null) Toast.makeText(ctx, "Non sono riuscito a creare il file", Toast.LENGTH_LONG).show()
+        else Exporter.share(
+            ctx, f, if (pdf) "application/pdf" else "application/zip",
+            if (pdf) "Condividi il report PDF" else "Condividi lo ZIP",
+        )
+    }
+
+    zipFor?.let { r ->
+        ZipNameDialog(
+            s, r,
+            onConfirm = { pattern -> zipFor = null; doExport(r, false, pattern) },
+            onDismiss = { zipFor = null },
+        )
+    }
+    return { r, pdf -> if (pdf) doExport(r, true, "") else { zipFor = r } }
+}
+
+/** Sceglie come chiamare i file nello ZIP, con segnaposto e anteprima. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ZipNameDialog(s: Session, r: Release, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    var pattern by remember { mutableStateOf(s.zipPattern.ifBlank { FileNames.DEFAULT }) }
+    val user = remember { Prefs.userName(ctx) }
+    val preview = remember(pattern) { FileNames.build(pattern, s, r, user).take(3) }
+
+    fun add(token: String) {
+        val sep = if (pattern.isEmpty() || pattern.last() in "_- ") "" else "_"
+        pattern += sep + "{" + token + "}"
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        title = { Text("Nomi dei file nello ZIP") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Caption("Componi il nome con i segnaposto tra graffe: toccali per aggiungerli.")
+                OutlinedTextField(
+                    value = pattern, onValueChange = { pattern = it.replace("\n", "") }, singleLine = true,
+                    shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    trailingIcon = { IconButton({ pattern = "" }) { Icon(AppIcons.Close, "Svuota") } },
+                )
+                FlowRow(
+                    Modifier.padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    for (t in FileNames.tokens(s)) AssistChip(onClick = { add(t) }, label = { Text(t) })
+                }
+                Text("Esempio", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                for (n in preview) Caption(n)
+            }
+        },
+        confirmButton = { TextButton({ onConfirm(pattern) }) { Text("Crea ZIP") } },
+        dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
+    )
 }

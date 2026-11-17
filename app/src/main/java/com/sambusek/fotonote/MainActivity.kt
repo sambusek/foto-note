@@ -71,9 +71,13 @@ class MainActivity : ComponentActivity() {
         if (Prefs.isMonitoring(this) && MediaHelper.hasPhotoPermission(this)) ServiceControl.start(this)
         setContent {
             AppTheme {
+                var user by remember { mutableStateOf(Prefs.userName(this)) }
                 var settings by rememberSaveable { mutableStateOf(false) }
-                if (settings) SettingsScreen(tick) { settings = false }
-                else HomeScreen(tick) { settings = true }
+                when {
+                    user.isBlank() -> WelcomeScreen { Prefs.setUserName(this, it); user = it }
+                    settings -> SettingsScreen(tick, onNameChange = { user = it }) { settings = false }
+                    else -> HomeScreen(tick, user) { settings = true }
+                }
             }
         }
     }
@@ -98,10 +102,33 @@ private fun photoPerms(): Array<String> = buildList {
 private val dayTime = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY)
 private val dayOnly = SimpleDateFormat("dd/MM/yyyy", Locale.ITALY)
 
+// ------------------------------------------------------------------ primo avvio
+
+/** Alla prima apertura si imposta il nome utente (usabile anche come campo automatico). */
+@Composable
+private fun WelcomeScreen(onDone: (String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    AppScreen("Benvenuto") {
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            Text("Come ti chiami?", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            Caption(
+                "Il tuo nome compare nei report PDF e si può stampare sulle foto con il campo \"Nome utente\". " +
+                    "Puoi cambiarlo nelle impostazioni.",
+                Modifier.padding(top = 6.dp, bottom = 12.dp),
+            )
+            CompactField(name, { name = it }, "Nome e cognome")
+            AppButton(
+                "Continua", { onDone(name.trim()) }, Modifier.fillMaxWidth().padding(top = 12.dp),
+                primary = true, enabled = name.isNotBlank(),
+            )
+        }
+    }
+}
+
 // ------------------------------------------------------------------ home: i sopralluoghi
 
 @Composable
-private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
+private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Unit) {
     val ctx = LocalContext.current
     val t = tick.intValue
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -135,6 +162,10 @@ private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
         ) {
+            Text(
+                "Ciao, $user!", style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 2.dp, top = 4.dp),
+            )
             if (!hasPhotos) Section("Prima di iniziare") {
                 Caption("Per raccogliere le foto del sopralluogo serve l'accesso alle foto: scegli \"Consenti tutto\".")
                 Spacer(Modifier.height(8.dp))
@@ -182,7 +213,7 @@ private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
+private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val t = tick.intValue
     BackHandler { onBack() }
@@ -199,6 +230,7 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
     }
     var monitoring by remember { mutableStateOf(Prefs.isMonitoring(ctx)) }
     var autoOpen by remember { mutableStateOf(Prefs.autoOpen(ctx)) }
+    var name by remember { mutableStateOf(Prefs.userName(ctx)) }
     val version = remember {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
     }
@@ -236,6 +268,14 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
         ) {
+            Section("Profilo") {
+                CompactField(name, {
+                    name = it
+                    if (it.isNotBlank()) { Prefs.setUserName(ctx, it); onNameChange(it.trim()) }
+                }, "Nome e cognome")
+                Caption("Usato nei report PDF e nel campo automatico \"Nome utente\".", Modifier.padding(top = 4.dp))
+            }
+
             Section("Tema") {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     ThemeMode.entries.forEachIndexed { i, m ->
