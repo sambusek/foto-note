@@ -169,12 +169,27 @@ object SessionStore {
     private fun dir(c: Context) = File(c.filesDir, "sessioni").apply { mkdirs() }
     private fun file(c: Context, id: String) = File(dir(c), "$id.json")
 
-    private fun parse(f: File): Session? = runCatching { sessionFromJson(JSONObject(f.readText())) }.getOrNull()
+    /** Sessioni già lette, con la data di modifica del file: si rilegge solo ciò che è cambiato. */
+    private val cache = HashMap<String, Pair<Long, Session>>()
 
-    fun save(c: Context, s: Session) = file(c, s.id).writeText(s.toJson().toString())
+    private fun parse(f: File): Session? {
+        val id = f.nameWithoutExtension
+        val mod = f.lastModified()
+        synchronized(cache) { cache[id]?.let { (m, s) -> if (m == mod) return s } }
+        val s = runCatching { sessionFromJson(JSONObject(f.readText())) }.getOrNull() ?: return null
+        synchronized(cache) { cache[id] = mod to s }
+        return s
+    }
+
+    fun save(c: Context, s: Session) {
+        val f = file(c, s.id)
+        f.writeAtomic(s.toJson().toString())
+        synchronized(cache) { cache[s.id] = f.lastModified() to s }
+    }
 
     /** Tutte le sessioni, la più recente per prima. */
-    fun all(c: Context): List<Session> = dir(c).listFiles()?.mapNotNull(::parse)?.sortedByDescending { it.start }.orEmpty()
+    fun all(c: Context): List<Session> =
+        dir(c).listFiles { f -> f.name.endsWith(".json") }?.mapNotNull(::parse)?.sortedByDescending { it.start }.orEmpty()
 
     fun get(c: Context, id: String): Session? = file(c, id).takeIf { it.exists() }?.let(::parse)
 
@@ -183,6 +198,7 @@ object SessionStore {
 
     fun remove(c: Context, id: String) {
         file(c, id).delete()
+        synchronized(cache) { cache.remove(id) }
     }
 
     /** Mette in pausa la sessione o la riprende. */
@@ -224,10 +240,13 @@ object SessionStore {
         val shot = MediaHelper.cameraPhotosBetween(c.contentResolver, s.start / 1000, if (s.open) null else s.end / 1000)
             .filter { !s.inPause(it.dateAddedSec * 1000) }
         val shotKeys = shot.map { it.uri.toString() }.toSet()
-        val added = s.extra.distinct().filter { it !in shotKeys }.mapNotNull { u ->
+        val wanted = s.extra.distinct().filter { it !in shotKeys }.mapNotNull { u ->
             val uri = Uri.parse(u)
             runCatching { ContentUris.parseId(uri) }.getOrNull()?.let { Photo(it, uri, 0L) }
         }
+        // si tengono solo le foto che esistono ancora nella Galleria
+        val alive = MediaHelper.existingIds(c.contentResolver, wanted.map { it.id })
+        val added = wanted.filter { it.id in alive }
         return added + shot
     }
 

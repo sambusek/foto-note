@@ -2,6 +2,7 @@ package com.sambusek.fotonote
 
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -478,13 +479,20 @@ fun ProgressDialog(message: String, fraction: Float) {
     )
 }
 
+/** Miniature già caricate (fino a circa 1/8 della memoria dell'app). */
+private val thumbCache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
+    override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+}
+
 /** Miniatura quadrata di una foto. */
 @Composable
 fun PhotoThumb(uri: Uri, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
-    val bmp by produceState<Bitmap?>(null, uri) {
-        value = withContext(Dispatchers.IO) {
-            runCatching { ctx.contentResolver.loadThumbnail(uri, android.util.Size(240, 240), null) }.getOrNull()
+    val key = uri.toString()
+    val bmp by produceState(thumbCache.get(key), uri) {
+        if (value == null) value = withContext(Dispatchers.IO) {
+            runCatching { ctx.contentResolver.loadThumbnail(uri, android.util.Size(240, 240), null) }
+                .getOrNull()?.also { thumbCache.put(key, it) }
         }
     }
     Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest)) {

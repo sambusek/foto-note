@@ -8,8 +8,9 @@ import android.database.ContentObserver
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
+import android.os.SystemClock
+import android.os.HandlerThread
 import android.os.IBinder
-import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.app.ServiceCompat
@@ -20,14 +21,17 @@ import androidx.core.app.ServiceCompat
  */
 class PhotoWatcherService : Service() {
 
-    private val handler = Handler(Looper.getMainLooper())
+    // le interrogazioni alla Galleria girano su un thread di lavoro, non su quello dell'interfaccia
+    private val worker = HandlerThread("pastashoot-watcher").apply { start() }
+    private val handler = Handler(worker.looper)
     private var startSec = 0L
-    private val seen = HashSet<Long>()
+    private val seen = LinkedHashSet<Long>()
 
     private val observer = object : ContentObserver(handler) {
         override fun onChange(selfChange: Boolean, uri: Uri?) {
-            // piccolo ritardo: la fotocamera finisce di scrivere il file
-            handler.postDelayed({ check(uri) }, 800)
+            // la fotocamera genera più eventi per foto: si aspetta che finisca di scrivere e si accorpano
+            handler.removeCallbacksAndMessages(TOKEN)
+            handler.postAtTime({ check(uri) }, TOKEN, SystemClock.uptimeMillis() + 800)
         }
     }
 
@@ -49,10 +53,15 @@ class PhotoWatcherService : Service() {
     override fun onDestroy() {
         contentResolver.unregisterContentObserver(observer)
         handler.removeCallbacksAndMessages(null)
+        worker.quitSafely()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private companion object {
+        val TOKEN = Any()
+    }
 
     private fun check(uri: Uri?) {
         if (!MediaHelper.hasPhotoPermission(this)) return
@@ -61,6 +70,7 @@ class PhotoWatcherService : Service() {
         else MediaHelper.latestCameraPhoto(contentResolver, startSec)
         if (photo == null || photo.dateAddedSec < startSec) return
         if (!seen.add(photo.id)) return
+        if (seen.size > 500) seen.remove(seen.first())
         onNewPhoto(photo)
     }
 

@@ -191,7 +191,7 @@ object ChoiceImport {
      * vengono scartati; le virgole dentro una voce diventano spazi.
      */
     fun read(c: Context, uri: Uri): List<String> {
-        val text = c.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+        val text = c.contentResolver.openInputStream(uri)?.use { it.readLimited(2 * MB).decodeToString() }
             ?: error("impossibile aprirlo")
         val lines = text.removePrefix("\uFEFF").lines().map { it.trim() }.filter { it.isNotEmpty() }
         val sep = Regex("[;,\t]")

@@ -57,7 +57,8 @@ object Updater {
             )
             else -> error("risposta di GitHub ${conn.responseCode}")
         }
-        val o = JSONObject(conn.inputStream.use { it.readBytes().decodeToString() })
+        val o = JSONObject(conn.inputStream.use { it.readLimited(2 * MB).decodeToString() })
+        conn.disconnect()
         val title = o.optString("name")
         val build = Regex("build (\\d+)").find(title)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         val assets = o.getJSONArray("assets")
@@ -83,7 +84,12 @@ object Updater {
         else {
             // repository privato: l'API risponde con un indirizzo temporaneo, da aprire senza token
             val api = open(u.assetApiUrl, token, "application/octet-stream", follow = false)
-            if (api.responseCode in 300..399) open(api.getHeaderField("Location"), null, "application/octet-stream") else api
+            if (api.responseCode in 300..399) {
+                val location = api.getHeaderField("Location")
+                api.disconnect()
+                require(location != null && location.startsWith("https://")) { "indirizzo di download non valido" }
+                open(location, null, "application/octet-stream")
+            } else api
         }
         check(conn.responseCode == 200) { "download non riuscito (${conn.responseCode})" }
         val total = conn.contentLengthLong.takeIf { it > 0 } ?: u.size
@@ -102,6 +108,10 @@ object Updater {
                 }
             }
         }
+        conn.disconnect()
+        // un APK è un archivio ZIP: se non inizia con "PK" il download non è valido
+        val ok = f.length() > 0 && f.inputStream().use { val b = ByteArray(2); it.read(b) == 2 && b[0] == 'P'.code.toByte() && b[1] == 'K'.code.toByte() }
+        if (!ok) { f.delete(); error("il file scaricato non è un APK valido") }
         return f
     }
 

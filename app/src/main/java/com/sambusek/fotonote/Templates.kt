@@ -64,10 +64,10 @@ object TemplateStore {
     }
 
     fun all(c: Context): List<Template> = dir(c).listFiles()
-        ?.mapNotNull { runCatching { fromJson(JSONObject(it.readText())) }.getOrNull() }
+        ?.filter { it.name.endsWith(".json") }?.mapNotNull { runCatching { fromJson(JSONObject(it.readText())) }.getOrNull() }
         ?.sortedBy { it.name.lowercase() }.orEmpty()
 
-    fun save(c: Context, t: Template) = file(c, t.id).writeText(t.toJson().toString())
+    fun save(c: Context, t: Template) = file(c, t.id).writeAtomic(t.toJson().toString())
 
     fun delete(c: Context, id: String) {
         file(c, id).delete()
@@ -89,7 +89,7 @@ object TemplateStore {
      * altrimenti se ne crea uno nuovo. Restituisce il template e se ne ha sostituito uno.
      */
     fun import(c: Context, uri: Uri): Pair<Template, Boolean> {
-        val text = c.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+        val text = c.contentResolver.openInputStream(uri)?.use { it.readLimited(1 * MB).decodeToString() }
             ?: error("File non leggibile")
         val t = fromJson(JSONObject(text))
         val existing = all(c).firstOrNull { it.name.equals(t.name, ignoreCase = true) }

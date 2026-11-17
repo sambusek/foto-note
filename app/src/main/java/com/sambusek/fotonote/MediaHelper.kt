@@ -112,6 +112,19 @@ object MediaHelper {
         System.currentTimeMillis()
     }
 
+    /** Fra gli [ids] dati, quelli ancora presenti nella Galleria (una sola query). */
+    fun existingIds(cr: ContentResolver, ids: List<Long>): Set<Long> {
+        if (ids.isEmpty()) return emptySet()
+        val out = HashSet<Long>()
+        runCatching {
+            cr.query(
+                collection, arrayOf(MediaStore.Images.Media._ID),
+                "${MediaStore.Images.Media._ID} IN (${ids.joinToString(",")})", null, null,
+            )?.use { c -> while (c.moveToNext()) out += c.getLong(0) }
+        }.onFailure { return ids.toSet() } // in caso di dubbio non si scarta nulla
+        return out
+    }
+
     /** Apre la foto originale, con la posizione GPS se il permesso lo consente. */
     fun openOriginal(c: Context, uri: Uri): java.io.InputStream? {
         val cr = c.contentResolver

@@ -82,26 +82,32 @@ object SessionPackage {
         val cr = c.contentResolver
         var manifest: JSONObject? = null
         val imported = HashMap<String, Uri>()
-
-        cr.openInputStream(uri)?.use { raw ->
-            ZipInputStream(raw).use { zip ->
-                while (true) {
-                    val e = zip.nextEntry ?: break
-                    if (e.name == MANIFEST) {
-                        manifest = JSONObject(zip.readBytes().decodeToString())
-                        require(manifest!!.optString("format") == FORMAT) { "Il file non è un sopralluogo di Pastashoot" }
-                        continue
+        try {
+            cr.openInputStream(uri)?.use { raw ->
+                ZipInputStream(raw).use { zip ->
+                    while (true) {
+                        val e = zip.nextEntry ?: break
+                        if (e.name == MANIFEST) {
+                            manifest = JSONObject(zip.readLimited(20 * MB).decodeToString())
+                            require(manifest!!.optString("format") == FORMAT) { "Il file non è un sopralluogo di Pastashoot" }
+                            continue
+                        }
+                        val m = manifest ?: continue
+                        val photos = m.getJSONArray("photos")
+                        val info = (0 until photos.length()).map { photos.getJSONObject(it) }.firstOrNull { it.getString("file") == e.name }
+                            ?: continue
+                        val folder = FileNames.clean(m.getJSONObject("session").getString("folder")).ifEmpty { "Sopralluogo" }
+                        val name = FileNames.clean(info.getString("name")).ifEmpty { "foto.jpg" }
+                        imported[e.name] = insertPhoto(c, zip, name, info.optLong("taken"), "Pictures/Pastashoot/Importati/$folder")
+                        onProgress(imported.size.toFloat() / photos.length())
                     }
-                    val m = manifest ?: continue
-                    val photos = m.getJSONArray("photos")
-                    val info = (0 until photos.length()).map { photos.getJSONObject(it) }.firstOrNull { it.getString("file") == e.name }
-                        ?: continue
-                    val folder = m.getJSONObject("session").getString("folder")
-                    imported[e.name] = insertPhoto(c, zip, info.getString("name"), info.optLong("taken"), "Pictures/Pastashoot/Importati/$folder")
-                    onProgress(imported.size.toFloat() / photos.length())
                 }
-            }
-        } ?: error("File non leggibile")
+            } ?: error("File non leggibile")
+        } catch (e: Throwable) {
+            // importazione fallita a metà: si tolgono le foto già copiate
+            imported.values.forEach { runCatching { cr.delete(it, null, null) } }
+            throw e
+        }
 
         val m = manifest ?: error("Il file non è un sopralluogo di Pastashoot")
         val photos = m.getJSONArray("photos")
@@ -137,7 +143,12 @@ object SessionPackage {
         }
         val target = cr.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
             ?: error("Impossibile salvare le foto")
-        cr.openOutputStream(target, "w")?.use { input.copyTo(it) } ?: error("Impossibile salvare le foto")
+        try {
+            cr.openOutputStream(target, "w")?.use { input.copyTo(it) } ?: error("Impossibile salvare le foto")
+        } catch (e: Throwable) {
+            runCatching { cr.delete(target, null, null) }
+            throw e
+        }
         cr.update(target, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
         return target
     }

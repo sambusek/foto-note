@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup e trasferimento (Android 12+): tutto tranne il token di GitHub. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="fotonote_secret.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="fotonote_secret.xml" />
+    </device-transfer>
+</data-extraction-rules>

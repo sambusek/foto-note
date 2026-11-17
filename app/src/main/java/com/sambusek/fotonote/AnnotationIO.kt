@@ -95,7 +95,7 @@ object AnnotationStore {
     /** Scrive un'annotazione importata, legandola alla foto [src] di questo telefono. */
     fun writeRaw(c: Context, src: Uri, o: JSONObject) {
         o.put("source", src.toString()).put("out", "")
-        file(c, src).writeText(o.toString())
+        file(c, src).writeAtomic(o.toString())
     }
 
     fun remove(c: Context, src: Uri) {
@@ -124,7 +124,7 @@ object AnnotationStore {
             .put("pad", JSONArray(listOf(pd.l.toDouble(), pd.t.toDouble(), pd.r.toDouble(), pd.b.toDouble())))
             .put("updated", System.currentTimeMillis())
             .put("strokes", arr)
-        file(c, src).writeText(o.toString())
+        file(c, src).writeAtomic(o.toString())
     }
 }
 
@@ -269,12 +269,7 @@ object AnnotationIO {
         if (strokes.isEmpty() && desc.isEmpty() && pad.isZero) {
             mime = cr.getType(src) ?: "image/jpeg"
             name = orig ?: "$stamp.jpg"
-            val hasLocation = ContextCompat.checkSelfPermission(
-                c, Manifest.permission.ACCESS_MEDIA_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-            val input = (if (hasLocation && src.authority == MediaStore.AUTHORITY) {
-                runCatching { cr.openInputStream(MediaStore.setRequireOriginal(src)) }.getOrNull()
-            } else null) ?: cr.openInputStream(src) ?: error("Foto non leggibile")
+            val input = MediaHelper.openOriginal(c, src) ?: error("Foto non leggibile")
             input.use { i -> FileOutputStream(tmp).use { o -> i.copyTo(o) } }
         } else {
             mime = "image/jpeg"

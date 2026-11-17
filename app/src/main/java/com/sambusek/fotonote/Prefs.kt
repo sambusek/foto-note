@@ -16,8 +16,19 @@ object Prefs {
     fun userName(c: Context): String = sp(c).getString("user_name", "").orEmpty()
     fun setUserName(c: Context, v: String) = sp(c).edit().putString("user_name", v.trim()).apply()
 
-    fun githubToken(c: Context): String = sp(c).getString("github_token", "").orEmpty()
-    fun setGithubToken(c: Context, v: String) = sp(c).edit().putString("github_token", v.trim()).apply()
+    /** Il token sta in un file a parte, escluso dai backup (vedi res/xml/*_rules.xml). */
+    private fun secret(c: Context) = c.getSharedPreferences("fotonote_secret", Context.MODE_PRIVATE)
+
+    fun githubToken(c: Context): String {
+        // spostamento dal file delle preferenze usato dalle versioni precedenti
+        sp(c).getString("github_token", null)?.let { old ->
+            secret(c).edit().putString("github_token", old).apply()
+            sp(c).edit().remove("github_token").apply()
+        }
+        return secret(c).getString("github_token", "").orEmpty()
+    }
+
+    fun setGithubToken(c: Context, v: String) = secret(c).edit().putString("github_token", v.trim()).apply()
 
     fun autoUpdateCheck(c: Context) = sp(c).getBoolean("auto_update_check", true)
     fun setAutoUpdateCheck(c: Context, v: Boolean) = sp(c).edit().putBoolean("auto_update_check", v).apply()
