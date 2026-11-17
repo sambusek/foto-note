@@ -39,6 +39,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -83,7 +84,9 @@ fun AppScreen(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxSize().background(cs.surface).windowInsetsPadding(WindowInsets.safeDrawing)) {
+    // Surface fornisce sfondo e colore del contenuto (testi e icone) giusti per il tema chiaro o scuro
+    Surface(Modifier.fillMaxSize(), color = cs.surface, contentColor = cs.onSurface) {
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Row(
             Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -104,6 +107,7 @@ fun AppScreen(
         }
         Column(Modifier.weight(1f).fillMaxWidth(), content = content)
         bottomBar?.invoke()
+    }
     }
 }
 
