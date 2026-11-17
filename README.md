@@ -119,3 +119,10 @@ originali (GPS compreso), disegni, testi, campi, layout e nota generale (le vers
 Sull'altro telefono si apre il file con Pastashoot, oppure home › ⋮ › **Importa un sopralluogo…**: le foto vanno in
 `Immagini/Pastashoot/Importati/CARTELLA` e il sopralluogo riparte come sessione in corso, a cui si aggiungono le
 foto scattate da quel momento. Serve che sull'altro telefono non ci sia già una sessione in corso.
+
+## Aggiornamenti
+
+Impostazioni › **Aggiornamenti**: controlla la release "latest" su GitHub, scarica l'APK e avvia l'installazione
+(la prima volta Android chiede di consentire le installazioni da Pastashoot). Con il controllo all'apertura attivo,
+la home mostra un avviso quando c'è una build nuova. Finché il repository è privato serve un token GitHub
+fine-grained di sola lettura (Contents: Read-only) sul solo repository `foto-note`.

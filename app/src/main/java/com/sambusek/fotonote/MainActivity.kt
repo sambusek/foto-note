@@ -11,6 +11,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -192,6 +193,9 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
         if (uri != null) importSession(ctx, uri) { tick.intValue++ }
     }
     SessionOps.busy?.let { ProgressDialog(it, SessionOps.progress) }
+    LaunchedEffect(Unit) {
+        if (Updater.dueForAutoCheck(ctx)) withContext(Dispatchers.IO) { Updater.check(ctx) }
+    }
     val selected = remember { mutableStateListOf<String>() }   // id dei sopralluoghi selezionati
     var askDelete by remember { mutableStateOf(false) }
     val selecting = selected.isNotEmpty()
@@ -264,6 +268,12 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                 "Ciao, $user!", style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 2.dp, top = 4.dp),
             )
+            Updater.available?.let { u ->
+                InfoBanner(
+                    AppIcons.Next, "È disponibile un aggiornamento (build ${u.build}).",
+                    Modifier.padding(top = 8.dp), action = "Installa", onAction = { Updater.downloadAndInstall(ctx, u) },
+                )
+            }
             if (!hasPhotos) Section("Prima di iniziare") {
                 Caption("Per raccogliere le foto del sopralluogo serve l'accesso alle foto: scegli \"Consenti tutto\".")
                 Spacer(Modifier.height(8.dp))
