@@ -95,6 +95,18 @@ object MediaHelper {
         return out
     }
 
+    /** Momento dello scatto (ms): data della foto, altrimenti data di aggiunta, altrimenti adesso. */
+    fun takenMillis(cr: ContentResolver, uri: Uri): Long = try {
+        cr.query(
+            uri, arrayOf(MediaStore.Images.Media.DATE_TAKEN, MediaStore.Images.Media.DATE_ADDED), null, null, null
+        )?.use { c ->
+            if (!c.moveToFirst()) null
+            else c.getLong(0).takeIf { it > 0 } ?: c.getLong(1).takeIf { it > 0 }?.times(1000)
+        } ?: System.currentTimeMillis()
+    } catch (e: Exception) {
+        System.currentTimeMillis()
+    }
+
     fun displayName(cr: ContentResolver, uri: Uri): String? = try {
         cr.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null

@@ -1,5 +1,19 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.isSystemInDarkTheme
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
@@ -121,19 +135,33 @@ val LocalCellInk = compositionLocalOf { Color.Black }
 fun glyphInk(): Color {
     val sk = LocalSkin.current
     val ink = LocalCellInk.current
-    return if (sk.id == SkinId.PLATINUM && ink == sk.ink) sk.accent else ink
+    return if ((sk.id == SkinId.PLATINUM || sk.id == SkinId.ANDROID) && ink == sk.ink) sk.accent else ink
 }
 
 /** Plan 9 scrive etichette e titoli in minuscolo. */
 @Composable
 fun tx(s: String): String = if (LocalSkin.current.lowercase) s.lowercase() else s
 
-private var skinLoaded = false
+val isAndroidSkin: Boolean @Composable get() = LocalSkin.current.id == SkinId.ANDROID
 
 @Composable
 fun PlatinumTheme(content: @Composable () -> Unit) {
     val ctx = LocalContext.current
-    if (!skinLoaded) { SkinStore.load(ctx); skinLoaded = true }
+    SkinStore.load(ctx)
+    if (SkinStore.current.id == SkinId.ANDROID) {
+        // Material 3 con i colori di sistema (Android 12+) e il tema chiaro/scuro del telefono
+        val dark = isSystemInDarkTheme()
+        val cs = when {
+            Build.VERSION.SDK_INT >= 31 -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
+            dark -> darkColorScheme()
+            else -> lightColorScheme()
+        }
+        val sk = androidSkin(cs)
+        CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
+            MaterialTheme(colorScheme = cs, content = content)
+        }
+        return
+    }
     val sk = SkinStore.current
     val square = RoundedCornerShape(0.dp)
     CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
@@ -154,6 +182,11 @@ fun PlatinumTheme(content: @Composable () -> Unit) {
 }
 
 fun ComponentActivity.platinumEdgeToEdge() {
+    SkinStore.load(this)
+    if (SkinStore.current.id == SkinId.ANDROID) {
+        enableEdgeToEdge() // icone delle barre di sistema secondo il tema chiaro/scuro
+        return
+    }
     val t = android.graphics.Color.TRANSPARENT
     enableEdgeToEdge(SystemBarStyle.light(t, t), SystemBarStyle.dark(t))
 }
@@ -196,6 +229,7 @@ fun Modifier.etched(): Modifier {
         }
         SkinId.PLAN9 -> border(1.dp, sk.lo)
         SkinId.SYSTEM7 -> border(1.dp, sk.ink)
+        SkinId.ANDROID -> this
     }
 }
 
@@ -208,6 +242,7 @@ fun Modifier.well(color: Color? = null): Modifier {
         SkinId.PLATINUM, SkinId.BEOS -> this.bevel(raised = false).padding(1.dp).border(1.dp, sk.ink).padding(1.dp).background(fill)
         SkinId.PLAN9 -> this.border(1.dp, sk.lo).padding(1.dp).background(fill)
         SkinId.SYSTEM7 -> this.border(1.dp, sk.ink).padding(1.dp).background(fill)
+        SkinId.ANDROID -> this.clip(RoundedCornerShape(12.dp)).background(fill)
     }
 }
 
@@ -249,6 +284,11 @@ fun Modifier.desktop(): Modifier {
 @Composable
 fun MenuBar(title: String) {
     val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        // niente barra dei menu finta: solo lo spazio della barra di stato
+        Spacer(Modifier.fillMaxWidth().background(sk.menuBg).statusBarsPadding())
+        return
+    }
     var time by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         val f = SimpleDateFormat("HH:mm", Locale.ITALY)
@@ -302,6 +342,21 @@ fun RetroWindow(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sk = LocalSkin.current
+    if (sk.titleBar == TitleBar.MATERIAL) {
+        Column(modifier.background(sk.bg)) {
+            Text(
+                title,
+                style = if (small) MaterialTheme.typography.titleSmall else MaterialTheme.typography.headlineSmall,
+                color = if (small) sk.ink2 else sk.ink,
+                maxLines = 1,
+                modifier = Modifier.padding(
+                    start = 16.dp, end = 16.dp, top = if (small) 8.dp else 12.dp, bottom = if (small) 4.dp else 8.dp
+                ),
+            )
+            content()
+        }
+        return
+    }
     val barH = if (small) 20.dp else 28.dp
     val shadowMod = when (sk.shadow) {
         Shadow.SOFT -> Modifier.drawBehind {
@@ -391,7 +446,7 @@ fun RetroWindow(
                     )
                 }
             }
-            TitleBar.TAB -> {}
+            TitleBar.TAB, TitleBar.MATERIAL -> {}
             TitleBar.TAG -> {
                 Row(
                     Modifier.fillMaxWidth().height(barH).background(sk.titleBg).padding(horizontal = 8.dp),
@@ -411,7 +466,7 @@ fun RetroWindow(
         }
         Box(
             Modifier.fillMaxWidth().height(1.dp).background(
-                when (sk.id) { SkinId.PLATINUM, SkinId.BEOS -> sk.lo; SkinId.PLAN9 -> sk.winBorder; SkinId.SYSTEM7 -> sk.ink }
+                when (sk.id) { SkinId.PLATINUM, SkinId.BEOS, SkinId.ANDROID -> sk.lo; SkinId.PLAN9 -> sk.winBorder; SkinId.SYSTEM7 -> sk.ink }
             )
         )
         content()
@@ -436,6 +491,35 @@ fun BevelBox(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        // riquadro tonale Material con l'effetto "ripple" di sistema
+        val shp = if (shape == RectangleShape) RoundedCornerShape(12.dp) else shape
+        val ink = when { !enabled -> sk.off; on -> sk.onInk; else -> sk.ink }
+        Box(
+            modifier
+                .clip(shp)
+                .background(if (on) sk.onBg else sk.ctlBg)
+                .then(if (onClick != null) Modifier.clickable(enabled = enabled, onClick = onClick) else Modifier)
+        ) {
+            CompositionLocalProvider(LocalCellInk provides ink) {
+                if (label != null) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (on || !enabled) ink else sk.ink2,
+                        maxLines = 1,
+                        modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 5.dp),
+                    )
+                }
+                Box(
+                    Modifier.align(Alignment.Center).padding(top = if (label != null) 12.dp else 0.dp),
+                    contentAlignment = Alignment.Center,
+                    content = content,
+                )
+            }
+        }
+        return
+    }
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     var flash by remember { mutableStateOf(false) }
@@ -513,7 +597,7 @@ fun BevelValue(text: String, enabled: Boolean = true, size: Int = 18) {
     Text(
         tx(text),
         fontFamily = sk.titleFont,
-        fontWeight = FontWeight.Bold,
+        fontWeight = if (sk.id == SkinId.ANDROID) FontWeight.Medium else FontWeight.Bold,
         fontSize = size.sp,
         color = if (enabled) LocalCellInk.current else sk.off,
         maxLines = 1,
@@ -531,6 +615,12 @@ fun PushButton(
     enabled: Boolean = true,
 ) {
     val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        // azione principale: pulsante pieno; le altre: pulsante con contorno
+        if (default) Button(onClick, modifier, enabled = enabled) { Text(text, maxLines = 1, softWrap = false) }
+        else OutlinedButton(onClick, modifier, enabled = enabled) { Text(text, maxLines = 1, softWrap = false) }
+        return
+    }
     val r = sk.pushRadius
     val ringColor = if (!enabled) sk.off else if (sk.id == SkinId.PLAN9) sk.pressBg else sk.ink
     val ring = if (default) Modifier
@@ -562,6 +652,22 @@ fun PushButton(
 @Composable
 fun RetroCheckbox(checked: Boolean, label: String, onToggle: () -> Unit, enabled: Boolean = true) {
     val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = { onToggle() }),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                label, style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) sk.ink else sk.off, modifier = Modifier.weight(1f).padding(end = 12.dp),
+            )
+            Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+        }
+        return
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -598,6 +704,24 @@ fun RetroCheckbox(checked: Boolean, label: String, onToggle: () -> Unit, enabled
 @Composable
 fun GroupBox(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        // intestazione di sezione + scheda arrotondata
+        Column(modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Text(
+                title, style = MaterialTheme.typography.titleSmall, color = sk.accent,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+            )
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .padding(16.dp),
+                content = content,
+            )
+        }
+        return
+    }
     Box(modifier.fillMaxWidth().padding(top = 10.dp)) {
         Column(
             Modifier
@@ -643,6 +767,7 @@ fun StatusLight(ok: Boolean) {
                 .border(1.dp, sk.ink, CircleShape)
         )
         SkinId.PLAN9 -> Box(Modifier.size(12.dp).background(if (ok) sk.ok else sk.ko))
+        SkinId.ANDROID -> Box(Modifier.size(10.dp).clip(CircleShape).background(if (ok) sk.ok else sk.ko))
     }
 }
 
@@ -650,6 +775,10 @@ fun StatusLight(ok: Boolean) {
 @Composable
 fun RetroProgress(fraction: Float, modifier: Modifier = Modifier) {
     val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        LinearProgressIndicator(progress = { fraction.coerceIn(0f, 1f) }, modifier = modifier.fillMaxWidth())
+        return
+    }
     Box(
         modifier
             .fillMaxWidth()
@@ -679,6 +808,23 @@ fun RetroTextField(
     enabled: Boolean = true,
 ) {
     val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        val single = maxHeight <= 80.dp
+        OutlinedTextField(
+            value = value,
+            onValueChange = onChange,
+            enabled = enabled,
+            singleLine = single,
+            placeholder = { Text(placeholder) },
+            modifier = modifier
+                .fillMaxWidth()
+                .then(
+                    if (single) Modifier
+                    else Modifier.heightIn(min = maxOf(minHeight, 56.dp), max = maxOf(maxHeight, 56.dp))
+                ),
+        )
+        return
+    }
     BasicTextField(
         value = value,
         onValueChange = onChange,
@@ -717,6 +863,16 @@ fun RetroAlert(
     onDismiss: () -> Unit,
 ) {
     val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(message) },
+            text = { Text(detail) },
+            confirmButton = { TextButton(onConfirm) { Text(confirm) } },
+            dismissButton = { TextButton(onDismiss) { Text(dismiss) } },
+        )
+        return
+    }
     Dialog(onDismissRequest = onDismiss) {
         CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
             val frame = when (sk.id) {
@@ -725,6 +881,7 @@ fun RetroAlert(
                 SkinId.SYSTEM7 -> Modifier
                     .border(1.dp, sk.ink).padding(3.dp).border(3.dp, sk.ink)
                 SkinId.PLAN9 -> Modifier.border(4.dp, sk.winBorder)
+                SkinId.ANDROID -> Modifier
             }
             Column(
                 Modifier
@@ -779,6 +936,10 @@ fun Modifier.dialogFrame(): Modifier {
         SkinId.SYSTEM7 -> Modifier
             .border(1.dp, sk.ink).padding(3.dp).border(3.dp, sk.ink)
         SkinId.PLAN9 -> Modifier.border(4.dp, sk.winBorder)
+        SkinId.ANDROID -> return this
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(24.dp)
     }
     return this.background(sk.bg).then(frame).padding(16.dp)
 }
@@ -798,6 +959,31 @@ fun RetroPrompt(
 ) {
     val sk = LocalSkin.current
     var text by remember { mutableStateOf(initial) }
+    if (sk.id == SkinId.ANDROID) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(title) },
+            text = {
+                Column {
+                    Text(message)
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = if (multiline) it else it.replace("\n", " ") },
+                        singleLine = !multiline,
+                        minLines = if (multiline) 3 else 1,
+                        placeholder = { Text(placeholder) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton({ onConfirm(text.trim()) }, enabled = allowEmpty || text.isNotBlank()) { Text(confirm) }
+            },
+            dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
+        )
+        return
+    }
     Dialog(onDismissRequest = onDismiss) {
         CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
             Column(Modifier.fillMaxWidth().dialogFrame()) {
@@ -869,3 +1055,22 @@ fun DeskScreen(content: @Composable ColumnScope.() -> Unit) {
         content()
     }
 }
+
+/** Pulsanti in fondo a un dialogo: testuali in Android, pulsanti della skin negli altri aspetti. */
+@Composable
+fun DialogButtons(dismiss: String, onDismiss: () -> Unit, confirm: String, onConfirm: () -> Unit, enabled: Boolean = true) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+        if (isAndroidSkin) {
+            TextButton(onDismiss) { Text(dismiss) }
+            TextButton(onConfirm, enabled = enabled) { Text(confirm) }
+        } else {
+            PushButton(dismiss, onDismiss)
+            PushButton(confirm, onConfirm, default = true, enabled = enabled)
+        }
+    }
+}
+
+/** Cornice dei menu a tendina: quella di sistema in Android, squadrata negli altri aspetti. */
+@Composable
+fun Modifier.menuFrame(): Modifier =
+    if (isAndroidSkin) this else this.background(P.Bg).border(1.dp, P.Ink)

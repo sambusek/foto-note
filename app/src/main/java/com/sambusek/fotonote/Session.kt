@@ -66,7 +66,11 @@ object SessionStore {
             fields = (0 until fl.length()).mapNotNull { i ->
                 val x = fl.getJSONObject(i)
                 val pos = FieldPos.entries.firstOrNull { p -> p.name == x.optString("pos") } ?: FieldPos.BOTTOM
-                NoteField(x.getString("id"), x.getString("label"), pos, x.optBoolean("showLabel", true))
+                NoteField(
+                    x.getString("id"), x.getString("label"), pos, x.optBoolean("showLabel", true),
+                    FieldKind.entries.firstOrNull { k -> k.name == x.optString("kind") } ?: FieldKind.INPUT,
+                    x.optString("text", ""),
+                )
             },
             items = (0 until it.length()).map { i ->
                 val x = it.getJSONObject(i)
@@ -81,7 +85,8 @@ object SessionStore {
         val items = JSONArray()
         for (i in s.items) items.put(JSONObject().put("src", i.src).put("out", i.out).put("name", i.name))
         val fields = JSONArray()
-        for (f in s.fields) fields.put(JSONObject().put("id", f.id).put("label", f.label).put("pos", f.pos.name).put("showLabel", f.showLabel))
+        for (f in s.fields) fields.put(JSONObject().put("id", f.id).put("label", f.label).put("pos", f.pos.name).put("showLabel", f.showLabel)
+                .put("kind", f.kind.name).put("text", f.text))
         val o = JSONObject()
             .put("fields", fields)
             .put("id", s.id).put("name", s.name).put("folder", s.folder)
@@ -192,7 +197,11 @@ object SessionOps {
                             val a = AnnotationStore.load(c, p.uri)
                             val (out, name) = AnnotationIO.exportTo(
                                 c, p.uri, a?.strokes ?: emptyList(), a?.note ?: "", s.relPath,
-                                s.fields, a?.values ?: emptyMap(),
+                                s.fields,
+                                AutoFields.resolve(
+                                    s.fields, a?.values ?: emptyMap(), s.name,
+                                    MediaHelper.takenMillis(c.contentResolver, p.uri),
+                                ),
                             )
                             items += SessionItem(p.uri.toString(), out.toString(), name)
                         } catch (e: Throwable) {

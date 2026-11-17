@@ -289,13 +289,22 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
             RetroWindow("Impostazioni", Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     GroupBox("Aspetto") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            for (id in SkinId.entries) {
-                                BevelButton(
-                                    null, height = 44.dp,
-                                    on = LocalSkin.current.id == id,
-                                    onClick = { SkinStore.set(ctx, id) },
-                                ) { BevelValue(id.label, size = 12) }
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (row in SkinId.entries.chunked(3)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    for (id in row) {
+                                        BevelButton(
+                                            null, height = 44.dp,
+                                            on = LocalSkin.current.id == id,
+                                            onClick = {
+                                                SkinStore.set(ctx, id)
+                                                // le barre di sistema cambiano stile con l'aspetto
+                                                (ctx as? android.app.Activity)?.recreate()
+                                            },
+                                        ) { BevelValue(id.label, size = 13) }
+                                    }
+                                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                                }
                             }
                         }
                     }

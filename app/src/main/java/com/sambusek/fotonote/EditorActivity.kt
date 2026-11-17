@@ -90,6 +90,7 @@ class EditorActivity : ComponentActivity() {
                 key(current.toString()) {
                     EditorScreen(
                         current, staging = session != null, fields = session?.fields ?: emptyList(),
+                        sessionName = session?.name ?: "",
                         index = index, total = list.size,
                         onNavigate = { d -> list.getOrNull(index + d)?.let { current = it } },
                         onClose = { finish() },
@@ -117,6 +118,7 @@ private fun EditorScreen(
     uri: Uri,
     staging: Boolean,
     fields: List<NoteField>,
+    sessionName: String,
     index: Int,
     total: Int,
     onNavigate: (Int) -> Unit,
@@ -130,7 +132,11 @@ private fun EditorScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf("") }
     var savedNote by remember { mutableStateOf("") }
-    var noteOpen by remember { mutableStateOf(fields.isNotEmpty()) }
+    val inputFields = fields.filter { !it.auto }
+    var noteOpen by remember { mutableStateOf(inputFields.isNotEmpty()) }
+    val takenMillis by produceState(System.currentTimeMillis(), uri) {
+        value = withContext(Dispatchers.IO) { MediaHelper.takenMillis(ctx.contentResolver, uri) }
+    }
     // valori dei campi del layout di sessione
     val values = remember { mutableStateMapOf<String, String>() }
     var savedValues by remember { mutableStateOf(emptyMap<String, String>()) }
@@ -296,8 +302,11 @@ private fun EditorScreen(
                     else -> {
                         val image = remember(bmp) { bmp.asImageBitmap() }
                         // anteprima dei testi, come verranno stampati
-                        val overlay = remember(note, vals, fields, bmp) {
-                            Overlay.create(note, fields, vals, bmp.width, bmp.height)
+                        val overlay = remember(note, vals, fields, bmp, takenMillis) {
+                            Overlay.create(
+                                note, fields, AutoFields.resolve(fields, vals, sessionName, takenMillis),
+                                bmp.width, bmp.height,
+                            )
                         }
                         InkCanvas(
                             image = image, state = ink, stylusOnly = stylusOnly, overlay = overlay,
@@ -326,7 +335,7 @@ private fun EditorScreen(
                         .padding(start = 6.dp, end = 6.dp, top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
-                    for (f in fields) {
+                    for (f in inputFields) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 "${f.label}:", fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 14.sp,
@@ -365,7 +374,7 @@ private fun EditorScreen(
                     DropdownMenu(
                         expanded = colorMenu,
                         onDismissRequest = { colorMenu = false },
-                        modifier = Modifier.background(P.Bg).border(1.dp, P.Ink),
+                        modifier = Modifier.menuFrame(),
                     ) {
                         Row(
                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),

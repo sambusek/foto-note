@@ -90,3 +90,9 @@ con ◀ ▶ o scorrendo con un dito a foto intera (in modalità "solo penna"), s
 dei quattro angoli della foto. Ogni foto ha poi i suoi valori; senza campi resta solo la nota libera, nella
 banda inferiore. Un nuovo sopralluogo parte dal layout dell'ultimo. **Elimina…** in una sessione in corso la
 abbandona senza salvare nulla.
+
+**Campi automatici** nel layout: data e ora dello scatto, nome del sopralluogo, etichetta fissa. Compaiono
+su tutte le foto della sessione senza doverli compilare.
+
+**Aspetto Android** (predefinito alla prima installazione): Material 3 con i colori di sistema (Material You)
+e il tema chiaro/scuro del telefono.

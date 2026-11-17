@@ -176,7 +176,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     if (multiOpen) {
         MultiTextDialog(
             count = selected.size,
-            fields = s.fields,
+            fields = s.fields.filter { !it.auto },
             // se le foto scelte hanno già tutte lo stesso testo, si parte da quello
             initialFor = { fieldId ->
                 val texts = selected.map { k ->

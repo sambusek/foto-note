@@ -69,7 +69,12 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
                     }
                     fields.forEachIndexed { i, f ->
                         key(f.id) {
-                            Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+                                PixelCaption(
+                                    if (f.auto) "${f.kind.label} · automatico, su tutte le foto"
+                                    else f.kind.label
+                                )
+                                Spacer(Modifier.height(4.dp))
                                 Row(
                                     Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -78,7 +83,7 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
                                     RetroTextField(
                                         f.label,
                                         { fields[i] = f.copy(label = it.replace("\n", " ")) },
-                                        "es. Piano",
+                                        if (f.auto) "Etichetta" else "es. Piano",
                                         Modifier.weight(1f),
                                         minHeight = 40.dp, maxHeight = 40.dp,
                                     )
@@ -86,6 +91,15 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
                                     BevelBox(null, Modifier.size(44.dp), onClick = { fields.removeAt(i) }) {
                                         BevelValue("✕", size = 16)
                                     }
+                                }
+                                if (f.kind == FieldKind.FIXED) {
+                                    Spacer(Modifier.height(6.dp))
+                                    RetroTextField(
+                                        f.text,
+                                        { fields[i] = f.copy(text = it.replace("\n", " ")) },
+                                        "Testo stampato su ogni foto",
+                                        minHeight = 40.dp, maxHeight = 40.dp,
+                                    )
                                 }
                                 // con l'etichetta: "Piano: 3"; senza: solo "3"
                                 RetroCheckbox(
@@ -95,9 +109,14 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
                             }
                         }
                     }
-                    PushButton("Aggiungi campo", {
-                        fields.add(NoteField(System.nanoTime().toString(), "", FieldPos.BOTTOM))
-                    })
+                    AddFieldButton { kind ->
+                        fields.add(
+                            NoteField(
+                                System.nanoTime().toString(), kind.defaultLabel, kind.defaultPos,
+                                showLabel = kind == FieldKind.INPUT, kind = kind,
+                            )
+                        )
+                    }
                 }
             }
             Row(
@@ -107,8 +126,34 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
             ) {
                 PushButton("Annulla", onCancel)
                 PushButton("Salva layout", {
-                    onDone(fields.filter { it.label.isNotBlank() }.map { it.copy(label = it.label.trim()) })
+                    onDone(
+                        fields.filter { it.auto || it.label.isNotBlank() }
+                            .map { it.copy(label = it.label.trim(), text = it.text.trim()) }
+                    )
                 }, default = true)
+            }
+        }
+    }
+}
+
+/** "Aggiungi campo…" con la scelta del tipo: da compilare o automatico. */
+@Composable
+private fun AddFieldButton(onPick: (FieldKind) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        PushButton("Aggiungi campo…", { open = true })
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.menuFrame()) {
+            for (k in FieldKind.entries) {
+                Text(
+                    tx(k.label),
+                    fontFamily = Sys,
+                    fontSize = 15.sp,
+                    color = P.Ink,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { open = false; onPick(k) }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                )
             }
         }
     }
@@ -122,7 +167,7 @@ private fun PosButton(pos: FieldPos, onPick: (FieldPos) -> Unit) {
         DropdownMenu(
             expanded = open,
             onDismissRequest = { open = false },
-            modifier = Modifier.background(P.Bg).border(1.dp, P.Ink),
+            modifier = Modifier.menuFrame(),
         ) {
             for (p in FieldPos.entries) {
                 Text(
@@ -147,7 +192,9 @@ private fun PosButton(pos: FieldPos, onPick: (FieldPos) -> Unit) {
  */
 @Composable
 private fun LayoutPreview(fields: List<NoteField>) {
-    fun names(pos: FieldPos) = fields.filter { it.pos == pos && it.label.isNotBlank() }.map { it.label.trim() }
+    fun names(pos: FieldPos) = fields.filter { it.pos == pos && (it.auto || it.label.isNotBlank()) }.map {
+        if (it.auto) it.label.trim().ifEmpty { it.kind.defaultLabel } + "*" else it.label.trim()
+    }
 
     @Composable
     fun RowScope.cell(weight: Float, empty: String, items: List<String>, align: TextAlign) {
@@ -191,7 +238,7 @@ private fun LayoutPreview(fields: List<NoteField>) {
             // la nota libera sta sempre al centro della banda inferiore
             strip(FieldPos.BL, FieldPos.BOTTOM, FieldPos.BR, "banda inferiore", listOf("Nota (predefinita)"))
         }
-        PixelCaption("↑ spazio aggiunto · angoli 20%, banda centrale 60%")
+        PixelCaption("↑ spazio aggiunto · angoli 20%, banda centrale 60% · * = automatico")
     }
 }
 
@@ -239,10 +286,7 @@ fun MultiTextDialog(
                 Spacer(Modifier.height(12.dp))
                 RetroTextField(text, { text = it }, "Scrivi qui", minHeight = 80.dp, maxHeight = 180.dp)
                 Spacer(Modifier.height(16.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                    PushButton("Annulla", onDismiss)
-                    PushButton("Applica", { onConfirm(target, text.trim()) }, default = true)
-                }
+                DialogButtons("Annulla", onDismiss, "Applica", { onConfirm(target, text.trim()) })
             }
         }
     }

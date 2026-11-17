@@ -1,5 +1,7 @@
 package com.sambusek.fotonote
 
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.ColorScheme
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,10 +14,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class SkinId(val label: String) { PLATINUM("Platinum"), PLAN9("Plan 9"), SYSTEM7("Sistema 7"), BEOS("BeOS") }
+enum class SkinId(val label: String) { ANDROID("Android"), PLATINUM("Platinum"), PLAN9("Plan 9"), SYSTEM7("Sistema 7"), BEOS("BeOS") }
 
 enum class Desk { DOTS, FLAT, CHECKER }
-enum class TitleBar { PLATINUM, STRIPES_BW, TAG, TAB }
+enum class TitleBar { PLATINUM, STRIPES_BW, TAG, TAB, MATERIAL }
 enum class Shadow { SOFT, HARD, NONE }
 
 /** Tutto ciò che distingue una skin dall'altra. */
@@ -153,7 +155,34 @@ val BeSkin = PlatinumSkin.copy(
     alertFill = Color(0xFFFFCB00),
 )
 
+/**
+ * Aspetto Android: Material 3 con i colori di sistema (Material You) e il tema chiaro o
+ * scuro del telefono. I colori veri si calcolano a runtime con [androidSkin].
+ */
+fun androidSkin(cs: ColorScheme): Skin = PlatinumSkin.copy(
+    id = SkinId.ANDROID,
+    desk = cs.surface, deskTex = cs.surface, deskStyle = Desk.FLAT,
+    bg = cs.surface, field = cs.surfaceContainerHighest,
+    ink = cs.onSurface, ink2 = cs.onSurfaceVariant, off = cs.onSurface.copy(alpha = 0.38f),
+    hi = cs.outlineVariant, lo = cs.outlineVariant,
+    accent = cs.primary, onBg = cs.secondaryContainer, onInk = cs.onSecondaryContainer,
+    pressBg = cs.surfaceContainerHighest, pressInk = cs.onSurface,
+    canvas = cs.surfaceContainerHighest, ok = cs.primary, ko = cs.error,
+    winBorder = Color.Transparent, winBorderW = 0.dp, shadow = Shadow.NONE,
+    titleBar = TitleBar.MATERIAL, titleBg = cs.surface,
+    menuBg = cs.surface, menuLine = Color.Transparent,
+    bevel = false, ctlBg = cs.surfaceContainerHigh, ctlBorder = Color.Transparent, pushRadius = 20.dp,
+    progress = listOf(cs.primary, cs.primary, cs.primary),
+    alertFill = cs.tertiaryContainer,
+    titleFont = FontFamily.Default, bodyFont = FontFamily.Default, smallFont = FontFamily.Default,
+    lowercase = false,
+)
+
+/** Segnaposto per l'aspetto Android (i colori reali arrivano dal tema di sistema). */
+val AndroidSkinPlaceholder = androidSkin(lightColorScheme())
+
 fun skinFor(id: SkinId) = when (id) {
+    SkinId.ANDROID -> AndroidSkinPlaceholder
     SkinId.PLATINUM -> PlatinumSkin
     SkinId.PLAN9 -> Plan9Skin
     SkinId.SYSTEM7 -> System7Skin
@@ -164,12 +193,16 @@ val LocalSkin = staticCompositionLocalOf { PlatinumSkin }
 
 /** Skin attiva, condivisa da tutte le schermate dell'app. */
 object SkinStore {
-    var current by mutableStateOf(PlatinumSkin)
+    var current by mutableStateOf(AndroidSkinPlaceholder)
         private set
+    private var loaded = false
 
+    /** Carica la skin salvata; alla prima installazione è l'aspetto Android. */
     fun load(c: Context) {
+        if (loaded) return
+        loaded = true
         val name = c.getSharedPreferences("fotonote", Context.MODE_PRIVATE).getString("skin", null)
-        current = skinFor(SkinId.entries.firstOrNull { it.name == name } ?: SkinId.PLATINUM)
+        current = skinFor(SkinId.entries.firstOrNull { it.name == name } ?: SkinId.ANDROID)
     }
 
     fun set(c: Context, id: SkinId) {

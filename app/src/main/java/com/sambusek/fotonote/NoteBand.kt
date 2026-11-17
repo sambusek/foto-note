@@ -18,11 +18,49 @@ enum class FieldPos(val label: String, val short: String) {
     BR("Angolo inferiore destro", "Ang. inf. dx"),
 }
 
+/** Tipo di campo: da compilare foto per foto, oppure automatico (uguale o calcolato per ogni foto). */
+enum class FieldKind(val label: String, val defaultLabel: String, val defaultPos: FieldPos) {
+    INPUT("Campo da compilare", "", FieldPos.BOTTOM),
+    DATE("Data dello scatto", "Data", FieldPos.TL),
+    TIME("Ora dello scatto", "Ora", FieldPos.TL),
+    SESSION("Nome del sopralluogo", "Sopralluogo", FieldPos.TOP),
+    FIXED("Etichetta fissa", "Etichetta", FieldPos.TR),
+}
+
 /**
  * Un campo del layout di una sessione (es. "Piano", "Stanza") con la sua posizione.
  * Con [showLabel] il testo è stampato come "Piano: 3", altrimenti solo "3".
+ * [text] è il testo dell'etichetta fissa ([FieldKind.FIXED]).
  */
-data class NoteField(val id: String, val label: String, val pos: FieldPos, val showLabel: Boolean = true)
+data class NoteField(
+    val id: String,
+    val label: String,
+    val pos: FieldPos,
+    val showLabel: Boolean = true,
+    val kind: FieldKind = FieldKind.INPUT,
+    val text: String = "",
+) {
+    val auto: Boolean get() = kind != FieldKind.INPUT
+}
+
+/** Valori dei campi automatici: data e ora dello scatto, nome del sopralluogo, etichette fisse. */
+object AutoFields {
+    fun resolve(
+        fields: List<NoteField>, values: Map<String, String>, sessionName: String, takenMillis: Long,
+    ): Map<String, String> {
+        if (fields.none { it.auto }) return values
+        val out = values.toMutableMap()
+        val date = java.util.Date(takenMillis)
+        for (f in fields) when (f.kind) {
+            FieldKind.INPUT -> {}
+            FieldKind.DATE -> out[f.id] = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ITALY).format(date)
+            FieldKind.TIME -> out[f.id] = java.text.SimpleDateFormat("HH:mm", java.util.Locale.ITALY).format(date)
+            FieldKind.SESSION -> out[f.id] = sessionName
+            FieldKind.FIXED -> out[f.id] = f.text
+        }
+        return out
+    }
+}
 
 /**
  * Striscia nera aggiunta sopra o sotto la foto, divisa in tre caselle:
@@ -94,7 +132,9 @@ class Overlay private constructor(private val top: Strip?, private val bottom: S
     companion object {
         private fun lines(pos: FieldPos, fields: List<NoteField>, values: Map<String, String>): List<String> =
             fields.filter { it.pos == pos }.mapNotNull { f ->
-                values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let { if (f.showLabel) "${f.label}: $it" else it }
+                values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    if (f.showLabel && f.label.isNotBlank()) "${f.label.trim()}: $it" else it
+                }
             }
 
         fun create(
