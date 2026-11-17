@@ -40,7 +40,19 @@ Ogni modifica su `main` avvia una build su GitHub Actions che pubblica l'APK nel
 2. Aprilo: la prima volta Android chiede di consentire l'installazione da quella app (Chrome / Archivio).
 3. Apri Pastashoot e segui i 3 passaggi a schermo (permessi, monitoraggio, batteria).
 
-Gli aggiornamenti si installano sopra la versione precedente (la chiave di firma è fissa, in `keystore/`).
+Gli aggiornamenti si installano sopra la versione precedente perché sono firmati sempre con la stessa chiave.
+
+### Chiave di firma
+
+La chiave che firma l'APK è privata e **non sta nel repository** (il repository è pubblico: chiunque
+potrebbe usarla per firmare un'app falsa che si installa sopra Pastashoot). La build la riceve da due
+secret del repository (*Settings › Secrets and variables › Actions*):
+
+- `SIGNING_KEYSTORE_BASE64` — il file della chiave (`pastashoot.keystore`, alias `pastashoot`) codificato in base64
+- `SIGNING_PASSWORD` — la sua password
+
+Il file e la password vanno conservati in un posto sicuro (es. un gestore di password), fuori dal repository.
+Se si perdono, si genera una chiave nuova: in quel caso l'app va disinstallata e reinstallata una volta.
 
 ## Struttura
 

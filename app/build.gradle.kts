@@ -19,20 +19,24 @@ android {
         versionName = "0.2.$buildNumber"
     }
 
-    // Chiave fissa: così ogni nuovo APK si installa sopra il precedente
-    // senza dover disinstallare (e senza perdere le annotazioni).
+    // Chiave fissa e privata: così ogni nuovo APK si installa sopra il precedente.
+    // Non sta nel repository: la build di GitHub la riceve dai secret
+    // SIGNING_KEYSTORE_BASE64 e SIGNING_PASSWORD (vedi README, «Chiave di firma»).
     signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        create("release") {
+            System.getenv("SIGNING_KEYSTORE_PATH")?.let { path ->
+                storeFile = file(path)
+                storePassword = System.getenv("SIGNING_PASSWORD")
+                keyAlias = "pastashoot"
+                keyPassword = System.getenv("SIGNING_PASSWORD")
+            }
         }
     }
 
     buildTypes {
-        debug {
-            signingConfig = signingConfigs.getByName("debug")
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

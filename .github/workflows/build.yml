@@ -27,11 +27,29 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
+      - name: Prepara la chiave di firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$SIGNING_PASSWORD" ]; then
+            echo "::error::Mancano i secret SIGNING_KEYSTORE_BASE64 e/o SIGNING_PASSWORD (vedi README, «Chiave di firma»)"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
       - name: Compila APK
-        run: gradle assembleDebug -PversionCode=${{ github.run_number }} --stacktrace
+        env:
+          SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: gradle assembleRelease -PversionCode=${{ github.run_number }} --stacktrace
 
       - name: Rinomina APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk pastashoot.apk
+        run: cp app/build/outputs/apk/release/app-release.apk pastashoot.apk
+
+      - name: Elimina la chiave dal runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
 
       - uses: actions/upload-artifact@v4
         with:
