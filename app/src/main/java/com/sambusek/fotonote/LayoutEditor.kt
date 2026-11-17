@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -151,12 +152,18 @@ private fun KindMenuItems(onPick: (FieldKind) -> Unit) {
 private fun KindPicker(kind: FieldKind, modifier: Modifier, onPick: (FieldKind) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
+        // etichetta del tipo: fondo d'accento e testo a contrasto
+        val cs = MaterialTheme.colorScheme
         Row(
-            Modifier.clickable { open = true }.padding(vertical = 6.dp),
+            Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(cs.primary)
+                .clickable { open = true }
+                .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Tipo: ${kind.label}", style = MaterialTheme.typography.titleSmall)
-            Icon(AppIcons.DropDown, "Cambia tipo")
+            Text("Tipo: ${kind.label}", style = MaterialTheme.typography.titleSmall, color = cs.onPrimary)
+            Icon(AppIcons.DropDown, "Cambia tipo", tint = cs.onPrimary)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             KindMenuItems { open = false; onPick(it) }
