@@ -11,6 +11,11 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateListOf
 import androidx.core.content.IntentCompat
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.TextButton
@@ -167,6 +172,39 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
         active?.let { s -> SessionStore.photos(ctx, s).count { it.uri.toString() !in s.excluded } } ?: 0
     }
     var askName by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val selected = remember { mutableStateListOf<String>() }   // id dei sopralluoghi selezionati
+    var askDelete by remember { mutableStateOf(false) }
+    val selecting = selected.isNotEmpty()
+    fun toggle(id: String) { if (id in selected) selected.remove(id) else selected.add(id) }
+    BackHandler(enabled = selecting) { selected.clear() }
+
+    if (askDelete) {
+        val chosen = closed.filter { it.id in selected }
+        val photos = chosen.sumOf { s -> s.releases.sumOf { it.items.size } }
+        ConfirmDialog(
+            title = if (chosen.size == 1) "Eliminare il sopralluogo?" else "Eliminare ${chosen.size} sopralluoghi?",
+            text = chosen.take(6).joinToString("\n") { "• ${it.folder}" } +
+                (if (chosen.size > 6) "\n… e altri ${chosen.size - 6}" else "") +
+                "\n\nVerranno persi definitivamente i dati di questi sopralluoghi (campi, note, versioni) " +
+                "e le $photos foto salvate nelle loro cartelle. Le foto originali della fotocamera restano nella Galleria.",
+            confirm = "Elimina",
+            onConfirm = {
+                askDelete = false
+                scope.launch {
+                    withContext(Dispatchers.IO) { chosen.forEach { SessionOps.delete(ctx, it) } }
+                    Toast.makeText(
+                        ctx, if (chosen.size == 1) "Sopralluogo eliminato" else "${chosen.size} sopralluoghi eliminati",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    selected.clear()
+                    tick.intValue++
+                }
+            },
+            dismiss = "Annulla",
+            onDismiss = { askDelete = false },
+        )
+    }
 
     if (askName) NewSessionDialog(
         templates = remember { TemplateStore.all(ctx) },
@@ -178,7 +216,16 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
         onDismiss = { askName = false },
     )
 
-    AppScreen("Sopralluoghi", actions = { ToolIcon(AppIcons.Tune, "Impostazioni", onSettings) }) {
+    AppScreen(
+        title = if (selecting) "${selected.size} selezionati" else "Sopralluoghi",
+        onBack = if (selecting) ({ selected.clear() }) else null,
+        actions = {
+            if (selecting) {
+                BarAction("Tutti", { selected.clear(); selected.addAll(closed.map { it.id }) })
+                ToolIcon(AppIcons.Delete, "Elimina i selezionati", { askDelete = true })
+            } else ToolIcon(AppIcons.Tune, "Impostazioni", onSettings)
+        },
+    ) {
         Column(
             Modifier
                 .verticalScroll(rememberScrollState())
@@ -221,13 +268,16 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
 
             Section("Sopralluoghi salvati") {
                 if (closed.isEmpty()) Caption("Ancora nessuno. I sopralluoghi chiusi compaiono qui.")
+                else if (!selecting) Caption("Tieni premuto un sopralluogo per selezionarne più di uno.")
                 closed.forEachIndexed { i, s ->
                     if (i > 0) ListDivider()
                     ListRow(
                         s.folder, "${s.items.size} foto · ${dayOnly.format(Date(s.start))}",
                         tags = listOfNotNull(s.versionTag?.let { it to false }, "Chiuso" to true),
+                        selected = s.id in selected,
+                        onLongClick = { toggle(s.id) },
                     ) {
-                        ctx.startActivity(SessionActivity.intent(ctx, s.id))
+                        if (selecting) toggle(s.id) else ctx.startActivity(SessionActivity.intent(ctx, s.id))
                     }
                 }
             }

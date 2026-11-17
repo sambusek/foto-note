@@ -3,6 +3,9 @@ package com.sambusek.fotonote
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -288,12 +291,22 @@ fun Tag(text: String, strong: Boolean = false) {
 
 /** Riga di elenco toccabile, con eventuali etichette accanto al titolo e freccia. */
 @Composable
-fun ListRow(title: String, subtitle: String?, tags: List<Pair<String, Boolean>> = emptyList(), onClick: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+fun ListRow(
+    title: String,
+    subtitle: String?,
+    tags: List<Pair<String, Boolean>> = emptyList(),
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (selected) cs.primaryContainer else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .heightIn(min = 52.dp)
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -308,7 +321,8 @@ fun ListRow(title: String, subtitle: String?, tags: List<Pair<String, Boolean>> 
             }
             if (subtitle != null) Caption(subtitle)
         }
-        Icon(AppIcons.Next, null, tint = cs.onSurfaceVariant)
+        if (selected) Icon(AppIcons.Check, "Selezionato", tint = cs.primary)
+        else Icon(AppIcons.Next, null, tint = cs.onSurfaceVariant)
     }
 }
 
