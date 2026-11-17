@@ -1,5 +1,11 @@
 package com.sambusek.fotonote
 
+import android.content.Context
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.clickable
@@ -136,12 +142,60 @@ private fun FieldEditor(f: NoteField, onChange: (NoteField) -> Unit, onRemove: (
             PositionPicker(f.pos) { onChange(f.copy(pos = it)) }
         }
         when (f.kind) {
-            FieldKind.CHOICE -> CompactField(f.choices, { onChange(f.copy(choices = it)) }, "Voci separate da virgola, es. P3, P4, P5")
+            FieldKind.CHOICE -> ChoiceEditor(f, onChange)
             FieldKind.FIXED -> CompactField(f.text, { onChange(f.copy(text = it)) }, "Testo da stampare su ogni foto")
             else -> {}
         }
         // con l'etichetta: "Piano: 3"; senza: solo "3"
         SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
+    }
+}
+
+/** Voci di un elenco di scelte: scritte a mano o importate da un file di testo / CSV. */
+@Composable
+private fun ChoiceEditor(f: NoteField, onChange: (NoteField) -> Unit) {
+    val ctx = LocalContext.current
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching { ChoiceImport.read(ctx, uri) }
+            .onSuccess { items ->
+                if (items.isEmpty()) {
+                    Toast.makeText(ctx, "Nessuna voce trovata nel file", Toast.LENGTH_SHORT).show()
+                } else {
+                    val merged = (f.options + items).distinct()
+                    onChange(f.copy(choices = merged.joinToString(", ")))
+                    Toast.makeText(ctx, "${merged.size - f.options.size} voci aggiunte", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .onFailure { Toast.makeText(ctx, "File non leggibile: ${it.message}", Toast.LENGTH_LONG).show() }
+    }
+    CompactField(f.choices, { onChange(f.copy(choices = it)) }, "Voci separate da virgola, es. P3, P4, P5", singleLine = false, maxHeight = 96.dp)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Caption(if (f.options.isEmpty()) "Nessuna voce" else "${f.options.size} voci", Modifier.weight(1f))
+        if (f.options.isNotEmpty()) BarAction("Svuota", { onChange(f.copy(choices = "")) })
+        BarAction("Importa da file…", { importer.launch(ChoiceImport.MIME_TYPES) })
+    }
+}
+
+/** Lettura delle voci da un file .txt o .csv. */
+object ChoiceImport {
+    val MIME_TYPES = arrayOf(
+        "text/plain", "text/csv", "text/comma-separated-values", "application/csv",
+        "text/tab-separated-values", "application/vnd.ms-excel", "application/octet-stream",
+    )
+
+    /**
+     * Una voce per riga (di un CSV si prende la prima colonna); se il file ha una sola riga,
+     * le voci sono separate da virgola, punto e virgola o tabulazione. Righe vuote e doppioni
+     * vengono scartati; le virgole dentro una voce diventano spazi.
+     */
+    fun read(c: Context, uri: Uri): List<String> {
+        val text = c.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+            ?: error("impossibile aprirlo")
+        val lines = text.removePrefix("\uFEFF").lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val sep = Regex("[;,\t]")
+        val raw = if (lines.size == 1) lines[0].split(sep) else lines.map { it.split(sep).first() }
+        return raw.map { it.trim().trim('"').trim().replace(",", " ") }.filter { it.isNotEmpty() }.distinct()
     }
 }
 

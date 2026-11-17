@@ -84,7 +84,7 @@ su tutte le foto della sessione senza doverli compilare.
 **Tema**: chiaro, scuro o come il sistema; colore d'accento a scelta oppure quello di sistema (Material You).
 
 **Tipi di campo**: testo libero, elenco di scelte (es. "Piano" con "P3, P4": nell'editor si sceglie dal menu ▾,
-oppure si scrive), data e ora dello scatto, nome del sopralluogo, etichetta fissa.
+oppure si scrive; le voci si possono importare da un file .txt o .csv: una per riga, o separate da virgola/punto e virgola), data e ora dello scatto, nome del sopralluogo, etichetta fissa.
 
 ## Versioni e consolidamento
 
