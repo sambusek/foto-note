@@ -48,18 +48,27 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
     DeskScreen {
         RetroWindow(
             title = "Layout delle note",
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
+            onBack = onCancel,
+            actions = {
+                BarAction("Salva", {
+                    onDone(
+                        fields.filter { it.auto || it.label.isNotBlank() }
+                            .map { it.copy(label = it.label.trim(), text = it.text.trim()) }
+                    )
+                }, primary = true)
+            },
+            modifier = Modifier.weight(1f).fillMaxWidth().windowPad(),
         ) {
             Column(
                 Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp)
+                    .padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
             ) {
                 PixelCaption(
                     "Definisci i campi da compilare su ogni foto di questo sopralluogo e dove stamparli. " +
                         "I testi stanno sempre in due strisce aggiunte sopra e sotto la foto, mai sopra la foto.",
-                    Modifier.padding(top = 10.dp),
+                    Modifier.padding(top = 4.dp),
                 )
                 GroupBox("Schema") { LayoutPreview(fields) }
                 GroupBox("Campi") {
@@ -118,19 +127,6 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
                         )
                     }
                 }
-            }
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PushButton("Annulla", onCancel)
-                PushButton("Salva layout", {
-                    onDone(
-                        fields.filter { it.auto || it.label.isNotBlank() }
-                            .map { it.copy(label = it.label.trim(), text = it.text.trim()) }
-                    )
-                }, default = true)
             }
         }
     }

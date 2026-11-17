@@ -1,5 +1,14 @@
 package com.sambusek.fotonote
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -158,7 +167,15 @@ fun PlatinumTheme(content: @Composable () -> Unit) {
         }
         val sk = androidSkin(cs)
         CompositionLocalProvider(LocalSkin provides sk, LocalCellInk provides sk.ink) {
-            MaterialTheme(colorScheme = cs, content = content)
+            MaterialTheme(
+                colorScheme = cs,
+                shapes = Shapes(
+                    extraSmall = RoundedCornerShape(2.dp), small = RoundedCornerShape(4.dp),
+                    medium = RoundedCornerShape(6.dp), large = RoundedCornerShape(8.dp),
+                    extraLarge = RoundedCornerShape(12.dp),
+                ),
+                content = content,
+            )
         }
         return
     }
@@ -242,7 +259,7 @@ fun Modifier.well(color: Color? = null): Modifier {
         SkinId.PLATINUM, SkinId.BEOS -> this.bevel(raised = false).padding(1.dp).border(1.dp, sk.ink).padding(1.dp).background(fill)
         SkinId.PLAN9 -> this.border(1.dp, sk.lo).padding(1.dp).background(fill)
         SkinId.SYSTEM7 -> this.border(1.dp, sk.ink).padding(1.dp).background(fill)
-        SkinId.ANDROID -> this.clip(RoundedCornerShape(12.dp)).background(fill)
+        SkinId.ANDROID -> this.clip(RoundedCornerShape(4.dp)).background(fill)
     }
 }
 
@@ -339,20 +356,38 @@ fun RetroWindow(
     title: String,
     modifier: Modifier = Modifier,
     small: Boolean = false,
+    subtitle: String? = null,
+    onBack: (() -> Unit)? = null,
+    actions: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sk = LocalSkin.current
     if (sk.titleBar == TitleBar.MATERIAL) {
         Column(modifier.background(sk.bg)) {
-            Text(
-                title,
-                style = if (small) MaterialTheme.typography.titleSmall else MaterialTheme.typography.headlineSmall,
-                color = if (small) sk.ink2 else sk.ink,
-                maxLines = 1,
-                modifier = Modifier.padding(
-                    start = 16.dp, end = 16.dp, top = if (small) 8.dp else 12.dp, bottom = if (small) 4.dp else 8.dp
-                ),
-            )
+            if (!small) {
+                // barra superiore compatta: indietro, titolo, azioni
+                Row(
+                    Modifier.fillMaxWidth().height(56.dp).padding(start = 4.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (onBack != null) {
+                        IconButton(onBack) { Icon(AppIcons.Back, "Indietro") }
+                    } else Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f).padding(start = 4.dp, end = 4.dp)) {
+                        Text(
+                            title, style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                            color = sk.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        if (subtitle != null) Text(
+                            subtitle, style = MaterialTheme.typography.bodySmall,
+                            color = sk.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (actions != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) { actions() }
+                    }
+                }
+            }
             content()
         }
         return
@@ -399,7 +434,21 @@ fun RetroWindow(
                         modifier = Modifier.widthIn(max = 260.dp),
                     )
                 }
-                Column(frame) { content() }
+                Column(frame) {
+                    if (onBack != null || actions != null || subtitle != null) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            if (onBack != null) ToolIcon(AppIcons.Back, "Indietro", onBack)
+                            if (subtitle != null) PixelCaption(subtitle, Modifier.weight(1f).padding(start = 4.dp))
+                            else Spacer(Modifier.weight(1f))
+                            actions?.invoke(this)
+                        }
+                    }
+                    content()
+                }
             },
         ) { measurables, c ->
             val tab = measurables[0].measure(c.copy(minWidth = 0, minHeight = 0))
@@ -469,6 +518,18 @@ fun RetroWindow(
                 when (sk.id) { SkinId.PLATINUM, SkinId.BEOS, SkinId.ANDROID -> sk.lo; SkinId.PLAN9 -> sk.winBorder; SkinId.SYSTEM7 -> sk.ink }
             )
         )
+        if (onBack != null || actions != null || subtitle != null) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                if (onBack != null) ToolIcon(AppIcons.Back, "Indietro", onBack)
+                if (subtitle != null) PixelCaption(subtitle, Modifier.weight(1f).padding(start = 4.dp))
+                else Spacer(Modifier.weight(1f))
+                actions?.invoke(this)
+            }
+        }
         content()
     }
 }
@@ -493,7 +554,7 @@ fun BevelBox(
     val sk = LocalSkin.current
     if (sk.id == SkinId.ANDROID) {
         // riquadro tonale Material con l'effetto "ripple" di sistema
-        val shp = if (shape == RectangleShape) RoundedCornerShape(12.dp) else shape
+        val shp = if (shape == RectangleShape) RoundedCornerShape(6.dp) else shape
         val ink = when { !enabled -> sk.off; on -> sk.onInk; else -> sk.ink }
         Box(
             modifier
@@ -617,8 +678,13 @@ fun PushButton(
     val sk = LocalSkin.current
     if (sk.id == SkinId.ANDROID) {
         // azione principale: pulsante pieno; le altre: pulsante con contorno
-        if (default) Button(onClick, modifier, enabled = enabled) { Text(text, maxLines = 1, softWrap = false) }
-        else OutlinedButton(onClick, modifier, enabled = enabled) { Text(text, maxLines = 1, softWrap = false) }
+        val shape = RoundedCornerShape(6.dp)
+        val pad = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+        if (default) Button(onClick, modifier, enabled = enabled, shape = shape, contentPadding = pad) {
+            Text(text, maxLines = 1, softWrap = false)
+        } else OutlinedButton(onClick, modifier, enabled = enabled, shape = shape, contentPadding = pad) {
+            Text(text, maxLines = 1, softWrap = false)
+        }
         return
     }
     val r = sk.pushRadius
@@ -656,7 +722,7 @@ fun RetroCheckbox(checked: Boolean, label: String, onToggle: () -> Unit, enabled
         Row(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
+                .heightIn(min = 44.dp)
                 .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = { onToggle() }),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -706,17 +772,17 @@ fun GroupBox(title: String, modifier: Modifier = Modifier, content: @Composable 
     val sk = LocalSkin.current
     if (sk.id == SkinId.ANDROID) {
         // intestazione di sezione + scheda arrotondata
-        Column(modifier.fillMaxWidth().padding(top = 16.dp)) {
+        Column(modifier.fillMaxWidth().padding(top = 12.dp)) {
             Text(
                 title, style = MaterialTheme.typography.titleSmall, color = sk.accent,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
             )
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    .padding(16.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 content = content,
             )
         }
@@ -809,19 +875,31 @@ fun RetroTextField(
 ) {
     val sk = LocalSkin.current
     if (sk.id == SkinId.ANDROID) {
+        // campo compatto: 40 dp di altezza minima, angoli piccoli, bordo sottile
         val single = maxHeight <= 80.dp
-        OutlinedTextField(
+        val style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, color = if (enabled) sk.ink else sk.off)
+        BasicTextField(
             value = value,
             onValueChange = onChange,
             enabled = enabled,
             singleLine = single,
-            placeholder = { Text(placeholder) },
+            textStyle = style,
+            cursorBrush = SolidColor(sk.accent),
             modifier = modifier
                 .fillMaxWidth()
-                .then(
-                    if (single) Modifier
-                    else Modifier.heightIn(min = maxOf(minHeight, 56.dp), max = maxOf(maxHeight, 56.dp))
-                ),
+                .heightIn(min = 40.dp, max = if (single) 40.dp else maxOf(maxHeight, 40.dp))
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp)),
+            decorationBox = { inner ->
+                Box(
+                    Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                    contentAlignment = if (single) Alignment.CenterStart else Alignment.TopStart,
+                ) {
+                    if (value.isEmpty()) Text(placeholder, style = style.copy(color = sk.off), maxLines = 1)
+                    inner()
+                }
+            },
         )
         return
     }
@@ -865,6 +943,7 @@ fun RetroAlert(
     val sk = LocalSkin.current
     if (sk.id == SkinId.ANDROID) {
         AlertDialog(
+            shape = RoundedCornerShape(12.dp),
             onDismissRequest = onDismiss,
             title = { Text(message) },
             text = { Text(detail) },
@@ -937,9 +1016,9 @@ fun Modifier.dialogFrame(): Modifier {
             .border(1.dp, sk.ink).padding(3.dp).border(3.dp, sk.ink)
         SkinId.PLAN9 -> Modifier.border(4.dp, sk.winBorder)
         SkinId.ANDROID -> return this
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(24.dp)
+            .padding(20.dp)
     }
     return this.background(sk.bg).then(frame).padding(16.dp)
 }
@@ -961,6 +1040,7 @@ fun RetroPrompt(
     var text by remember { mutableStateOf(initial) }
     if (sk.id == SkinId.ANDROID) {
         AlertDialog(
+            shape = RoundedCornerShape(12.dp),
             onDismissRequest = onDismiss,
             title = { Text(title) },
             text = {
@@ -1074,3 +1154,122 @@ fun DialogButtons(dismiss: String, onDismiss: () -> Unit, confirm: String, onCon
 @Composable
 fun Modifier.menuFrame(): Modifier =
     if (isAndroidSkin) this else this.background(P.Bg).border(1.dp, P.Ink)
+
+/**
+ * Pulsante a icona per le barre: icona Material in Android, pulsante in rilievo negli altri aspetti.
+ * [on] indica uno strumento attivo.
+ */
+@Composable
+fun ToolIcon(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    on: Boolean = false,
+    tint: Color? = null,
+) {
+    val sk = LocalSkin.current
+    if (sk.id == SkinId.ANDROID) {
+        if (on) FilledTonalIconButton(onClick, enabled = enabled, shape = RoundedCornerShape(6.dp)) {
+            Icon(icon, description, tint = tint ?: LocalContentColor.current)
+        } else IconButton(onClick, enabled = enabled) {
+            Icon(icon, description, tint = if (!enabled) sk.off else tint ?: sk.ink2)
+        }
+        return
+    }
+    BevelBox(null, Modifier.size(40.dp), on = on, enabled = enabled, onClick = onClick) {
+        Icon(icon, description, tint = if (!enabled) sk.off else LocalCellInk.current, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Azione testuale nella barra superiore: pulsante pieno se principale, testuale altrimenti. */
+@Composable
+fun BarAction(text: String, onClick: () -> Unit, primary: Boolean = false, enabled: Boolean = true) {
+    if (isAndroidSkin) {
+        val pad = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
+        if (primary) Button(
+            onClick, enabled = enabled, shape = RoundedCornerShape(6.dp), contentPadding = pad,
+            modifier = Modifier.padding(horizontal = 4.dp).height(36.dp),
+        ) { Text(text, maxLines = 1) }
+        else TextButton(onClick, enabled = enabled, contentPadding = pad) { Text(text, maxLines = 1) }
+    } else PushButton(text, onClick, default = primary, enabled = enabled)
+}
+
+/** Voce di un menu "altre azioni". */
+class MenuItemSpec(val text: String, val enabled: Boolean = true, val onClick: () -> Unit)
+
+/** Pulsante "⋮" che apre un menu con le azioni meno frequenti. */
+@Composable
+fun OverflowMenu(items: List<MenuItemSpec>) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ToolIcon(AppIcons.More, "Altre azioni", { open = true })
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.menuFrame()) {
+            for (it in items) {
+                DropdownMenuItem(
+                    text = { Text(tx(it.text), fontFamily = Sys) },
+                    enabled = it.enabled,
+                    onClick = { open = false; it.onClick() },
+                )
+            }
+        }
+    }
+}
+
+/** Margini delle finestre: nessuno in Android (contenuto a tutto schermo), quelli indicati altrove. */
+@Composable
+fun Modifier.windowPad(start: Dp = 6.dp, end: Dp = 9.dp, top: Dp = 10.dp, bottom: Dp = 12.dp): Modifier =
+    if (isAndroidSkin) this else this.padding(start = start, end = end, top = top, bottom = bottom)
+
+/** Spaziatura interna dei contenuti delle finestre: più stretta in Android. */
+val contentPad: Dp @Composable get() = if (isAndroidSkin) 12.dp else 12.dp
+
+/** Area delle griglie di foto: a tutta larghezza in Android, incassata negli altri aspetti. */
+@Composable
+fun Modifier.gridArea(): Modifier =
+    if (isAndroidSkin) this.padding(horizontal = 2.dp) else this.padding(horizontal = 8.dp).well()
+
+/** Spazio tra le miniature. */
+val gridGap: Dp @Composable get() = if (isAndroidSkin) 2.dp else 4.dp
+
+/** Riga di elenco toccabile: compatta e separata da una linea in Android, pulsante negli altri aspetti. */
+@Composable
+fun ListRow(title: String, subtitle: String?, onClick: () -> Unit) {
+    if (isAndroidSkin) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, color = P.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = P.Ink2, maxLines = 1)
+            }
+            Icon(AppIcons.Next, null, tint = P.Ink2)
+        }
+        return
+    }
+    BevelBox(null, Modifier.fillMaxWidth().heightIn(min = 54.dp), onClick = onClick) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text(title, fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = LocalCellInk.current, maxLines = 1)
+            if (subtitle != null) Text(subtitle, fontFamily = Pixel, fontSize = 12.sp, color = LocalCellInk.current)
+        }
+    }
+}
+
+/** Separatore sottile tra le righe di un elenco (solo Android). */
+@Composable
+fun ListDivider() {
+    if (isAndroidSkin) Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+    else Spacer(Modifier.height(6.dp))
+}
+
+/** Titolo in evidenza dentro un riquadro (es. il nome della sessione in corso). */
+@Composable
+fun BigText(text: String) {
+    if (isAndroidSkin) Text(text, style = MaterialTheme.typography.titleMedium, color = P.Ink, maxLines = 2)
+    else Text(text, fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = P.Ink)
+}

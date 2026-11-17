@@ -125,10 +125,13 @@ private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 10.dp, end = 13.dp, top = 14.dp, bottom = 16.dp)
+                .windowPad(start = 10.dp, end = 13.dp, top = 14.dp, bottom = 16.dp)
         ) {
-            RetroWindow("Sopralluoghi", Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp)) {
+            RetroWindow(
+                "Sopralluoghi", Modifier.fillMaxWidth(),
+                actions = { ToolIcon(AppIcons.Tune, "Impostazioni", onSettings) },
+            ) {
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 16.dp)) {
                     if (!hasPhotos) {
                         GroupBox("Prima di iniziare") {
                             PixelCaption("Per raccogliere le foto del sopralluogo serve l'accesso alle foto: scegli \"Consenti tutto\".")
@@ -142,17 +145,13 @@ private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 StatusLight(true)
                                 Spacer(Modifier.width(10.dp))
-                                Text(
-                                    active.name, fontFamily = Sys, fontWeight = FontWeight.Bold,
-                                    fontSize = 22.sp, color = P.Ink,
-                                )
+                                BigText(active.name)
                             }
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(4.dp))
                             PixelCaption(
-                                "Iniziata il ${dayTime.format(Date(active.start))}\n" +
-                                    "$activeCount foto finora · cartella ${active.folder}"
+                                "Iniziata il ${dayTime.format(Date(active.start))} · $activeCount foto"
                             )
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(10.dp))
                             PushButton(
                                 "Apri la sessione",
                                 { ctx.startActivity(SessionActivity.intent(ctx, active.id)) },
@@ -162,10 +161,10 @@ private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
                     } else {
                         GroupBox("Nuovo sopralluogo") {
                             PixelCaption(
-                                "Inizia una sessione, poi scatta con la fotocamera: tutte le foto finiscono " +
-                                    "nella sessione, dove puoi annotarle. Alla chiusura vengono salvate in una cartella dedicata."
+                                "Inizia una sessione e scatta: le foto finiscono nella sessione, dove le annoti. " +
+                                    "Alla chiusura vengono salvate in una cartella dedicata."
                             )
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(10.dp))
                             PushButton("Inizia sopralluogo…", { askName = true }, default = true, enabled = hasPhotos)
                         }
                     }
@@ -174,34 +173,15 @@ private fun HomeScreen(tick: MutableIntState, onSettings: () -> Unit) {
                         if (closed.isEmpty()) {
                             PixelCaption("Ancora nessuno. I sopralluoghi chiusi compaiono qui.")
                         } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                for (s in closed) {
-                                    BevelBox(
-                                        null,
-                                        Modifier.fillMaxWidth().heightIn(min = 54.dp),
-                                        onClick = { ctx.startActivity(SessionActivity.intent(ctx, s.id)) },
-                                    ) {
-                                        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
-                                            Text(
-                                                s.folder, fontFamily = Sys, fontWeight = FontWeight.Bold,
-                                                fontSize = 15.sp, color = LocalCellInk.current, maxLines = 1,
-                                            )
-                                            Text(
-                                                "${s.items.size} foto · ${dayOnly.format(Date(s.start))}",
-                                                fontFamily = Pixel, fontSize = 12.sp, color = LocalCellInk.current,
-                                            )
-                                        }
+                            Column {
+                                closed.forEachIndexed { i, s ->
+                                    if (i > 0) ListDivider()
+                                    ListRow(s.folder, "${s.items.size} foto · ${dayOnly.format(Date(s.start))}") {
+                                        ctx.startActivity(SessionActivity.intent(ctx, s.id))
                                     }
                                 }
                             }
                         }
-                    }
-
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 14.dp),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        PushButton("Impostazioni…", onSettings)
                     }
                 }
             }
@@ -284,17 +264,17 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 10.dp, end = 13.dp, top = 14.dp, bottom = 16.dp)
+                .windowPad(start = 10.dp, end = 13.dp, top = 14.dp, bottom = 16.dp)
         ) {
-            RetroWindow("Impostazioni", Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp)) {
+            RetroWindow("Impostazioni", Modifier.fillMaxWidth(), onBack = onBack) {
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 16.dp)) {
                     GroupBox("Aspetto") {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             for (row in SkinId.entries.chunked(3)) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     for (id in row) {
                                         BevelButton(
-                                            null, height = 44.dp,
+                                            null, height = 40.dp,
                                             on = LocalSkin.current.id == id,
                                             onClick = {
                                                 SkinStore.set(ctx, id)
@@ -341,12 +321,6 @@ private fun SettingsScreen(tick: MutableIntState, onBack: () -> Unit) {
                             "aggiungi Pastashoot alle \"App mai in sospensione\".",
                         Modifier.padding(top = 14.dp),
                     )
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        PushButton("Fine", onBack, default = true)
-                    }
                 }
             }
         }

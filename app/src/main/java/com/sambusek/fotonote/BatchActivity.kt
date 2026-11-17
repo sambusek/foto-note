@@ -176,7 +176,15 @@ private fun BatchScreen(initial: List<Uri>, onClose: () -> Unit) {
         MenuBar("Pastashoot")
         RetroWindow(
             title = "Nota multipla",
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
+            subtitle = "${uris.size} foto",
+            onBack = { if (!running) onClose() },
+            actions = {
+                BarAction(
+                    "Applica", { apply() }, primary = true,
+                    enabled = !running && note.isNotBlank() && uris.isNotEmpty(),
+                )
+            },
+            modifier = Modifier.weight(1f).fillMaxWidth().windowPad(),
         ) {
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 GroupBox("Foto selezionate: ${uris.size}") {
@@ -202,20 +210,10 @@ private fun BatchScreen(initial: List<Uri>, onClose: () -> Unit) {
                     Spacer(Modifier.height(6.dp))
                     RetroProgress(if (uris.isEmpty()) 0f else done.toFloat() / uris.size)
                 } else {
-                    PixelCaption("Banda nera con la nota sotto ogni foto. Una nota precedente viene sostituita, i disegni restano. Originali intatti.")
+                    PixelCaption("La nota va nella banda sotto ogni foto; una nota precedente viene sostituita, i disegni restano.")
                 }
             }
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PushButton("Annulla", onClose, enabled = !running)
-                PushButton(
-                    "Applica a ${uris.size}", { apply() }, default = true,
-                    enabled = !running && note.isNotBlank() && uris.isNotEmpty(),
-                )
-            }
+            Spacer(Modifier.height(12.dp))
         }
     }
 }
@@ -239,24 +237,23 @@ fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCancel: () 
     ) {
         MenuBar("Pastashoot")
         RetroWindow(
-            title = if (onlyCamera) "Fotocamera" else "Tutte le immagini",
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
+            title = if (selected.isEmpty()) "Scegli le foto" else "${selected.size} selezionate",
+            subtitle = "${photos.size} ${if (onlyCamera) "foto della fotocamera" else "immagini"}",
+            onBack = onCancel,
+            actions = {
+                BarAction("Fatto", { onDone(selected.toList()) }, primary = true, enabled = selected.isNotEmpty())
+            },
+            modifier = Modifier.weight(1f).fillMaxWidth().windowPad(),
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.weight(1f)) {
-                    RetroCheckbox(onlyCamera, "Solo fotocamera", { onlyCamera = !onlyCamera })
-                }
-                PixelCaption("${photos.size} elementi")
+            Box(Modifier.padding(horizontal = 12.dp)) {
+                RetroCheckbox(onlyCamera, "Solo foto della fotocamera", { onlyCamera = !onlyCamera })
             }
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(92.dp),
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp).well(P.White),
-                contentPadding = PaddingValues(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().gridArea(),
+                contentPadding = PaddingValues(gridGap),
+                horizontalArrangement = Arrangement.spacedBy(gridGap),
+                verticalArrangement = Arrangement.spacedBy(gridGap),
             ) {
                 gridItems(photos, key = { it.toString() }) { u ->
                     val idx = selected.indexOf(u)
@@ -286,14 +283,6 @@ fun PhotoGrid(preselected: List<Uri>, onDone: (List<Uri>) -> Unit, onCancel: () 
                         }
                     }
                 }
-            }
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PushButton("Annulla", onCancel)
-                PushButton("Scegli ${selected.size}", { onDone(selected.toList()) }, default = true, enabled = selected.isNotEmpty())
             }
         }
     }

@@ -90,7 +90,7 @@ private fun SessionScreen(id: String, tick: MutableIntState, onClose: () -> Unit
 
     if (session == null) {
         DeskScreen {
-            RetroWindow("Sopralluogo", Modifier.fillMaxWidth().padding(12.dp)) {
+            RetroWindow("Sopralluogo", Modifier.fillMaxWidth().windowPad(), onBack = onClose) {
                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     CenterNote("Questa sessione non esiste più.")
                 }
@@ -236,22 +236,39 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
 
     DeskScreen {
         RetroWindow(
-            title = s.folder,
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
+            title = if (selecting) "${selected.size} selezionate" else s.name,
+            subtitle = if (selecting) "Tocca le foto a cui dare lo stesso testo"
+            else "In corso · $included foto · ${annotated.size} annotate",
+            onBack = if (selecting) ({ selecting = false; selected.clear() }) else onClose,
+            actions = {
+                if (selecting) {
+                    BarAction("Tutte", {
+                        selected.clear()
+                        selected.addAll(photos.map { it.uri.toString() }.filter { it !in s.excluded })
+                    })
+                    BarAction("Testo…", { multiOpen = true }, primary = true, enabled = selected.isNotEmpty())
+                } else {
+                    ToolIcon(AppIcons.Camera, "Fotocamera", {
+                        try {
+                            ctx.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
+                        } catch (e: Exception) {
+                            Toast.makeText(ctx, "Apri la fotocamera dal telefono", Toast.LENGTH_SHORT).show()
+                        }
+                    })
+                    ToolIcon(AppIcons.TextFields, "Testo su più foto", { selecting = true }, enabled = included > 0)
+                    OverflowMenu(
+                        listOf(
+                            MenuItemSpec("Aggiungi foto già scattate…") { picking = true },
+                            MenuItemSpec("Layout delle note…") { layoutEdit = true },
+                            MenuItemSpec("Elimina sessione…") { askDiscard = true },
+                        )
+                    )
+                }
+            },
+            modifier = Modifier.weight(1f).fillMaxWidth().windowPad(),
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusLight(true)
-                PixelCaption(
-                    if (selecting) "Selezione · ${selected.size} foto"
-                    else "In corso · $included foto · ${annotated.size} annotate",
-                    Modifier.padding(start = 8.dp),
-                )
-            }
             Box(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp).well(),
+                Modifier.weight(1f).fillMaxWidth().gridArea(),
                 contentAlignment = Alignment.Center,
             ) {
                 if (photos.isEmpty()) {
@@ -262,9 +279,9 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(92.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(gridGap),
+                        horizontalArrangement = Arrangement.spacedBy(gridGap),
+                        verticalArrangement = Arrangement.spacedBy(gridGap),
                     ) {
                         itemsIndexed(photos, key = { _, p -> p.id }) { _, p ->
                             val key = p.uri.toString()
@@ -342,49 +359,16 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                     }
                 }
             }
-            PixelCaption(
-                if (selecting) "Tocca le foto a cui dare lo stesso testo."
-                else "Tocca una foto per annotarla. Tieni premuto per escluderla (o per togliere una foto aggiunta).",
-                Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
-            )
-            if (selecting) {
-                Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    PushButton("Annulla", { selecting = false; selected.clear() })
-                    PushButton("Tutte", {
-                        selected.clear()
-                        selected.addAll(photos.map { it.uri.toString() }.filter { it !in s.excluded })
-                    })
-                    PushButton("Testo a ${selected.size}…", { multiOpen = true }, default = true, enabled = selected.isNotEmpty())
-                }
-            } else {
-                FlowRow(
-                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PushButton("Fotocamera", {
-                        try {
-                            ctx.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
-                        } catch (e: Exception) {
-                            Toast.makeText(ctx, "Apri la fotocamera dal telefono", Toast.LENGTH_SHORT).show()
-                        }
-                    })
-                    PushButton("Aggiungi foto…", { picking = true })
-                    PushButton("Layout note…", { layoutEdit = true })
-                    PushButton("Testo multiplo", { selecting = true }, enabled = included > 0)
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    PushButton("Indietro", onClose)
-                    PushButton("Elimina…", { askDiscard = true })
-                    PushButton("Chiudi sessione…", { askClose = true }, default = true)
+            if (!selecting) {
+                PixelCaption(
+                    "Tocca una foto per annotarla, tienila premuta per escluderla.",
+                    Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp),
+                )
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    PushButton(
+                        "Chiudi sopralluogo e salva", { askClose = true }, default = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
@@ -431,19 +415,19 @@ private fun ClosedScreen(s: Session, tick: MutableIntState, onClose: () -> Unit)
     DeskScreen {
         RetroWindow(
             title = s.folder,
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 6.dp, end = 9.dp, top = 10.dp, bottom = 12.dp),
+            subtitle = "${s.items.size} foto · chiuso il ${closedFmt.format(Date(s.end))}",
+            onBack = onClose,
+            actions = {
+                OverflowMenu(listOf(MenuItemSpec("Elimina sopralluogo…") { askDelete = true }))
+            },
+            modifier = Modifier.weight(1f).fillMaxWidth().windowPad(),
         ) {
-            PixelCaption(
-                "${s.items.size} foto · chiuso il ${closedFmt.format(Date(s.end))}\n" +
-                    "Immagini › Pastashoot › ${s.folder}",
-                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            )
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(92.dp),
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp).well(),
-                contentPadding = PaddingValues(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().gridArea(),
+                contentPadding = PaddingValues(gridGap),
+                horizontalArrangement = Arrangement.spacedBy(gridGap),
+                verticalArrangement = Arrangement.spacedBy(gridGap),
             ) {
                 itemsIndexed(s.items, key = { _, i -> i.out }) { _, item ->
                     val uri = Uri.parse(item.out)
@@ -466,15 +450,16 @@ private fun ClosedScreen(s: Session, tick: MutableIntState, onClose: () -> Unit)
                     }
                 }
             }
+            PixelCaption(
+                "Immagini › Pastashoot › ${s.folder}",
+                Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp),
+            )
             Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PushButton("Indietro", onClose)
-                PushButton("Elimina…", { askDelete = true })
-                PushButton("ZIP", { export(false) })
-                PushButton("PDF", { export(true) }, default = true)
+                PushButton("ZIP", { export(false) }, modifier = Modifier.weight(1f))
+                PushButton("Report PDF", { export(true) }, default = true, modifier = Modifier.weight(1f))
             }
         }
     }

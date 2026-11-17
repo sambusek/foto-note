@@ -1,5 +1,10 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -248,51 +253,32 @@ private fun EditorScreen(
         value = withContext(Dispatchers.IO) { MediaHelper.displayName(ctx.contentResolver, uri) } ?: "Senza titolo"
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .desktop()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
-    ) {
-        MenuBar("Pastashoot")
+    val android = isAndroidSkin
 
+    DeskScreen {
         RetroWindow(
-            title = if (canNav) "$fileName · ${index + 1}/$total" else fileName,
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(start = 4.dp, end = 7.dp, top = 6.dp),
+            title = fileName,
+            subtitle = if (canNav) "Foto ${index + 1} di $total" else null,
+            onBack = { if (unsaved) askExit = true else onClose() },
+            actions = {
+                ToolIcon(AppIcons.Undo, "Annulla", { ink.undo() }, enabled = ink.canUndo)
+                ToolIcon(AppIcons.Redo, "Ripeti", { ink.redo() }, enabled = ink.canRedo)
+                if (canNav && !android) {
+                    ToolIcon(AppIcons.Prev, "Foto precedente", { go(-1) }, enabled = index > 0)
+                    ToolIcon(AppIcons.Next, "Foto successiva", { go(1) }, enabled = index < total - 1)
+                }
+                if (!staging) ToolIcon(AppIcons.Share, "Condividi", { save(true) }, enabled = ready)
+                BarAction("Salva", { save(false) }, primary = true, enabled = ready)
+            },
+            modifier = Modifier.weight(1f).fillMaxWidth().windowPad(start = 4.dp, end = 7.dp, top = 6.dp, bottom = 0.dp),
         ) {
-            // barra dei comandi
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                PushButton("Chiudi", { if (unsaved) askExit = true else onClose() })
-                BevelBox(null, Modifier.size(44.dp), enabled = ink.canUndo, onClick = { ink.undo() }) {
-                    BevelValue("↶", enabled = ink.canUndo, size = 20)
-                }
-                BevelBox(null, Modifier.size(44.dp), enabled = ink.canRedo, onClick = { ink.redo() }) {
-                    BevelValue("↷", enabled = ink.canRedo, size = 20)
-                }
-                Spacer(Modifier.weight(1f))
-                if (canNav) {
-                    BevelBox(null, Modifier.size(44.dp), enabled = index > 0, onClick = { go(-1) }) {
-                        BevelValue("◀", enabled = index > 0, size = 16)
-                    }
-                    BevelBox(null, Modifier.size(44.dp), enabled = index < total - 1, onClick = { go(1) }) {
-                        BevelValue("▶", enabled = index < total - 1, size = 16)
-                    }
-                }
-                if (!staging) PushButton("Condividi", { save(true) }, enabled = ready)
-                PushButton("Salva", { save(false) }, default = true, enabled = ready)
-            }
-
             // foto e disegno
             Box(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 6.dp)
-                    .well(P.Canvas),
+                    .padding(horizontal = if (android) 0.dp else 6.dp)
+                    .then(if (android) Modifier.background(P.Canvas) else Modifier.well(P.Canvas)),
                 contentAlignment = Alignment.Center,
             ) {
                 val bmp = bitmap
@@ -315,12 +301,10 @@ private fun EditorScreen(
                     }
                 }
                 if (saving) {
-                    Box(Modifier.width(220.dp).background(P.Bg).border(1.dp, P.Ink).padding(12.dp)) {
-                        Column {
-                            Text("Salvataggio…", fontFamily = Pixel, fontSize = 14.sp, color = P.Ink)
-                            Spacer(Modifier.height(8.dp))
-                            RetroProgress(0.6f)
-                        }
+                    Column(Modifier.width(220.dp).dialogFrame()) {
+                        Text("Salvataggio…", fontFamily = Sys, fontSize = 14.sp, color = P.Ink)
+                        Spacer(Modifier.height(8.dp))
+                        RetroProgress(0.6f)
                     }
                 }
             }
@@ -330,17 +314,14 @@ private fun EditorScreen(
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 200.dp)
+                        .heightIn(max = 180.dp)
                         .verticalScroll(rememberScrollState())
-                        .padding(start = 6.dp, end = 6.dp, top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                        .padding(horizontal = if (android) 10.dp else 6.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (android) 4.dp else 5.dp),
                 ) {
                     for (f in inputFields) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "${f.label}:", fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                                color = P.Ink, maxLines = 1, modifier = Modifier.width(82.dp).padding(end = 6.dp),
-                            )
+                            FieldLabel(f.label)
                             RetroTextField(
                                 values[f.id] ?: "", { values[f.id] = it.replace("\n", " ") },
                                 f.pos.short, minHeight = 38.dp, maxHeight = 64.dp,
@@ -348,72 +329,121 @@ private fun EditorScreen(
                         }
                     }
                     Row(verticalAlignment = Alignment.Top) {
-                        Text(
-                            "Nota:", fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                            color = P.Ink, modifier = Modifier.width(82.dp).padding(top = 10.dp, end = 6.dp),
-                        )
-                        RetroTextField(note, { note = it }, "Scrivi o detta una nota…", maxHeight = 130.dp)
+                        FieldLabel("Nota", Modifier.padding(top = 10.dp))
+                        RetroTextField(note, { note = it }, "Scrivi o detta una nota…", maxHeight = 110.dp)
                     }
                 }
             }
-            Spacer(Modifier.height(6.dp))
+            if (!android) Spacer(Modifier.height(6.dp))
         }
 
-        // palette degli strumenti
-        RetroWindow(
-            title = "Strumenti",
-            small = true,
-            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 7.dp, top = 8.dp, bottom = 9.dp),
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(5.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                BevelButton("Colore", onClick = { colorMenu = true }) {
-                    Swatch(ink.color, size = 26)
-                    DropdownMenu(
-                        expanded = colorMenu,
-                        onDismissRequest = { colorMenu = false },
-                        modifier = Modifier.menuFrame(),
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            for (c in PALETTE) {
-                                Box(Modifier.clickable { ink.color = c; ink.eraser = false; colorMenu = false }) {
-                                    Swatch(c, size = 34, selected = c == ink.color)
-                                }
-                            }
+        // strumenti
+        val wIdx = WIDTHS.indexOfFirst { it.second == ink.widthFactor }.coerceAtLeast(0)
+        val nextWidth = { ink.widthFactor = WIDTHS[(wIdx + 1) % WIDTHS.size].second }
+        val colorPicker: @Composable () -> Unit = {
+            DropdownMenu(expanded = colorMenu, onDismissRequest = { colorMenu = false }, modifier = Modifier.menuFrame()) {
+                Row(
+                    Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    for (c in PALETTE) {
+                        Box(Modifier.clickable { ink.color = c; ink.eraser = false; colorMenu = false }) {
+                            Swatch(c, size = 34, selected = c == ink.color)
                         }
                     }
                 }
-                val wIdx = WIDTHS.indexOfFirst { it.second == ink.widthFactor }.coerceAtLeast(0)
-                BevelButton("Tratto", onClick = { ink.widthFactor = WIDTHS[(wIdx + 1) % WIDTHS.size].second }) {
-                    BevelValue(WIDTHS[wIdx].first)
+            }
+        }
+        if (android) {
+            // barra degli strumenti in basso, una sola riga di icone
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (canNav) ToolIcon(AppIcons.Prev, "Foto precedente", { go(-1) }, enabled = index > 0)
+                Box {
+                    IconButton({ colorMenu = true }) { Swatch(ink.color, size = 22) }
+                    colorPicker()
                 }
-                BevelButton("Gomma", on = ink.eraser, onClick = { ink.eraser = !ink.eraser }) {
-                    BevelValue(if (ink.eraser) "SÌ" else "NO")
+                IconButton(nextWidth) {
+                    val d = when (wIdx) { 0 -> 6.dp; 1 -> 10.dp; else -> 16.dp }
+                    Box(Modifier.size(d).clip(CircleShape).background(P.Ink2))
                 }
-                BevelButton("Input", on = stylusOnly, onClick = {
-                    stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly)
-                }) {
-                    BevelValue(if (stylusOnly) "PEN" else "+DITO", size = 15)
-                }
-                BevelButton("Nota", on = noteOpen, onClick = { noteOpen = !noteOpen }) {
-                    BevelValue("T", size = 20)
-                }
-                BevelButton("Pulisci", enabled = ink.strokes.isNotEmpty(), onClick = { ink.clearAll() }) {
-                    BevelValue("✕", enabled = ink.strokes.isNotEmpty(), size = 18)
+                ToolIcon(AppIcons.Eraser, "Gomma", { ink.eraser = !ink.eraser }, on = ink.eraser)
+                ToolIcon(
+                    AppIcons.Touch, "Disegna anche con il dito",
+                    { stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly) }, on = !stylusOnly,
+                )
+                ToolIcon(AppIcons.Notes, "Testi", { noteOpen = !noteOpen }, on = noteOpen)
+                ToolIcon(AppIcons.Delete, "Cancella tutti i tratti", { ink.clearAll() }, enabled = ink.strokes.isNotEmpty())
+                if (canNav) ToolIcon(AppIcons.Next, "Foto successiva", { go(1) }, enabled = index < total - 1)
+            }
+        } else {
+            RetroWindow(
+                title = "Strumenti",
+                small = true,
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 7.dp, top = 8.dp, bottom = 9.dp),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    BevelButton("Colore", onClick = { colorMenu = true }) {
+                        Swatch(ink.color, size = 26)
+                        colorPicker()
+                    }
+                    BevelButton("Tratto", onClick = nextWidth) { BevelValue(WIDTHS[wIdx].first) }
+                    BevelButton("Gomma", on = ink.eraser, onClick = { ink.eraser = !ink.eraser }) {
+                        BevelValue(if (ink.eraser) "SÌ" else "NO")
+                    }
+                    BevelButton("Input", on = stylusOnly, onClick = {
+                        stylusOnly = !stylusOnly; Prefs.setStylusOnly(ctx, stylusOnly)
+                    }) {
+                        BevelValue(if (stylusOnly) "PEN" else "+DITO", size = 15)
+                    }
+                    BevelButton("Nota", on = noteOpen, onClick = { noteOpen = !noteOpen }) {
+                        BevelValue("T", size = 20)
+                    }
+                    BevelButton("Pulisci", enabled = ink.strokes.isNotEmpty(), onClick = { ink.clearAll() }) {
+                        BevelValue("✕", enabled = ink.strokes.isNotEmpty(), size = 18)
+                    }
                 }
             }
         }
     }
 }
 
-/** Campione di colore quadrato. */
+/** Etichetta a sinistra di un campo di testo. */
+@Composable
+private fun FieldLabel(text: String, modifier: Modifier = Modifier) {
+    if (isAndroidSkin) Text(
+        text, style = MaterialTheme.typography.labelLarge, color = P.Ink2, maxLines = 1,
+        overflow = TextOverflow.Ellipsis, modifier = modifier.width(76.dp).padding(end = 8.dp),
+    ) else Text(
+        "$text:", fontFamily = Sys, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+        color = P.Ink, maxLines = 1, modifier = modifier.width(82.dp).padding(end = 6.dp),
+    )
+}
+
+/** Campione di colore: tondo in Android, quadrato negli altri aspetti. */
 @Composable
 private fun Swatch(color: Int, size: Int, selected: Boolean = false) {
+    if (isAndroidSkin) {
+        Box(
+            Modifier
+                .size(size.dp)
+                .clip(CircleShape)
+                .border(if (selected) 3.dp else 1.dp, if (selected) P.Accent else P.Shade, CircleShape)
+                .padding(if (selected) 4.dp else 1.dp)
+                .clip(CircleShape)
+                .background(Color(color))
+        )
+        return
+    }
     Box(
         Modifier
             .size(size.dp)
