@@ -69,6 +69,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -110,8 +113,11 @@ fun AppScreen(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    "Pastashoot",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    buildAnnotatedString {
+                        append("Pasta")
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("shoot") }
+                    },
+                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 34.sp, lineHeight = 40.sp),
                     color = cs.primary,
                 )
                 Text(claim, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
