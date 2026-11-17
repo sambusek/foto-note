@@ -16,7 +16,7 @@ object Prefs {
     fun userName(c: Context): String = sp(c).getString("user_name", "").orEmpty()
     fun setUserName(c: Context, v: String) = sp(c).edit().putString("user_name", v.trim()).apply()
 
-    /** Il token sta in un file a parte, escluso dai backup (vedi res/xml/*_rules.xml). */
+    /** Il token sta in un file a parte, escluso dai backup (vedi backup_rules e data_extraction_rules). */
     private fun secret(c: Context) = c.getSharedPreferences("fotonote_secret", Context.MODE_PRIVATE)
 
     fun githubToken(c: Context): String {
