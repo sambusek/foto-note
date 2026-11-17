@@ -365,6 +365,11 @@ private fun EditorScreen(
     }
 }
 
+/** Pulsante per passare alla foto precedente o successiva: pieno nel colore d'accento. */
+@Composable
+private fun NavButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean) =
+    FilledIconButton(onClick, Modifier.size(44.dp), enabled = enabled, shape = RoundedCornerShape(6.dp)) { Icon(icon, description) }
+
 @Composable
 private fun FieldLabel(text: String, modifier: Modifier = Modifier) = Text(
     text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
