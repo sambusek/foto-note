@@ -293,7 +293,7 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
 
             if (active != null) Section("Sessione in corso") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(true)
+                    StatusDot(true, pulse = true)
                     Spacer(Modifier.width(8.dp))
                     Text(active.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
                     active.versionTag?.let { Tag(it) }

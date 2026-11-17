@@ -1,5 +1,13 @@
 package com.sambusek.fotonote
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.LruCache
@@ -109,11 +117,9 @@ fun AppScreen(
     // Surface fornisce sfondo e colore del contenuto (testi e icone) giusti per il tema chiaro o scuro
     Surface(Modifier.fillMaxSize(), color = cs.surface, contentColor = cs.onSurface) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-        if (claim != null) Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
+        if (claim != null) Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 4.dp)) {
+            // il fondo dell'icona delle impostazioni sta sulla linea di base della scritta
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Text(
                     buildAnnotatedString {
                         append("Pasta")
@@ -121,10 +127,11 @@ fun AppScreen(
                     },
                     style = MaterialTheme.typography.headlineMedium.copy(fontSize = 34.sp, lineHeight = 40.sp),
                     color = cs.primary,
+                    modifier = Modifier.weight(1f),
                 )
-                Text(claim, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                Row(Modifier.offset(y = 4.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+            Text(claim, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         } else {
         if (brand) Text(
             "Pastashoot",
@@ -310,9 +317,22 @@ fun CenterMessage(text: String, modifier: Modifier = Modifier) {
 
 /** Pallino di stato: colore d'accento se a posto, rosso se manca qualcosa. */
 @Composable
-fun StatusDot(ok: Boolean) {
+fun StatusDot(ok: Boolean, pulse: Boolean = false) {
     val cs = MaterialTheme.colorScheme
-    Box(Modifier.size(10.dp).clip(CircleShape).background(if (ok) cs.primary else cs.error))
+    val color = if (ok) cs.primary else cs.error
+    if (!pulse) return Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+    // pulsazione: un alone che si allarga e svanisce attorno al punto, come un "rec"
+    val t = rememberInfiniteTransition(label = "pulse")
+    val k by t.animateFloat(
+        0f, 1f, infiniteRepeatable(tween(1400, easing = LinearOutSlowInEasing), RepeatMode.Restart), label = "k",
+    )
+    Box(Modifier.size(10.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.requiredSize(10.dp * (1f + 1.4f * k)).clip(CircleShape)
+                .background(color.copy(alpha = 0.45f * (1f - k)))
+        )
+        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+    }
 }
 
 /** Etichetta breve di stato (es. "Chiuso", "V02"); [strong] = piena nel colore d'accento. */
