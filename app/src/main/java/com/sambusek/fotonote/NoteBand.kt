@@ -39,8 +39,11 @@ data class NoteField(
     val showLabel: Boolean = true,
     val kind: FieldKind = FieldKind.INPUT,
     val text: String = "",
+    /** Elenco di scelte, scritto separato da virgole (es. "P3, P4"); vuoto = testo libero. */
+    val choices: String = "",
 ) {
     val auto: Boolean get() = kind != FieldKind.INPUT
+    val options: List<String> get() = choices.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 }
 
 /** Valori dei campi automatici: data e ora dello scatto, nome del sopralluogo, etichette fisse. */

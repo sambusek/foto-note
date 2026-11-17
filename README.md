@@ -82,3 +82,6 @@ abbandona senza salvare nulla.
 su tutte le foto della sessione senza doverli compilare.
 
 **Tema**: chiaro, scuro o come il sistema; colore d'accento a scelta oppure quello di sistema (Material You).
+
+**Elenchi di scelte**: un campo da compilare può avere un elenco (es. "Piano" con "P3, P4"); nell'editor si
+sceglie dal menu a tendina accanto al campo, oppure si scrive liberamente.

@@ -55,7 +55,7 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
             BarAction("Salva", {
                 onDone(
                     fields.filter { it.auto || it.label.isNotBlank() }
-                        .map { it.copy(label = it.label.trim(), text = it.text.trim()) }
+                        .map { it.copy(label = it.label.trim(), text = it.text.trim(), choices = it.options.joinToString(", ")) }
                 )
             }, primary = true)
         },
@@ -93,7 +93,13 @@ fun LayoutScreen(initial: List<NoteField>, onDone: (List<NoteField>) -> Unit, on
 @Composable
 private fun FieldEditor(f: NoteField, onChange: (NoteField) -> Unit, onRemove: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Caption(if (f.auto) "${f.kind.label} · automatico" else f.kind.label)
+        Caption(
+            when {
+                f.auto -> "${f.kind.label} · automatico"
+                f.options.isNotEmpty() -> "Campo con elenco di scelte · si può anche scrivere"
+                else -> f.kind.label
+            }
+        )
         Row(
             Modifier.fillMaxWidth().padding(top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -105,6 +111,10 @@ private fun FieldEditor(f: NoteField, onChange: (NoteField) -> Unit, onRemove: (
         }
         if (f.kind == FieldKind.FIXED) CompactField(
             f.text, { onChange(f.copy(text = it)) }, "Testo stampato su ogni foto", Modifier.padding(top = 4.dp),
+        )
+        if (f.kind == FieldKind.INPUT) CompactField(
+            f.choices, { onChange(f.copy(choices = it)) }, "Elenco di scelte, es. P3, P4 (facoltativo)",
+            Modifier.padding(top = 4.dp),
         )
         // con l'etichetta: "Piano: 3"; senza: solo "3"
         SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
@@ -207,6 +217,13 @@ fun MultiTextDialog(
                     for ((id, name) in listOf<Pair<String?, String>>(null to "Nota") + fields.map { it.id to it.label }) {
                         FilterChip(selected = target == id, onClick = { target = id }, label = { Text(name) })
                     }
+                }
+                val options = fields.firstOrNull { it.id == target }?.options.orEmpty()
+                if (options.isNotEmpty()) Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    for (o in options) FilterChip(selected = text == o, onClick = { text = o }, label = { Text(o) })
                 }
                 OutlinedTextField(
                     value = text, onValueChange = { text = it }, placeholder = { Text("Scrivi qui") },

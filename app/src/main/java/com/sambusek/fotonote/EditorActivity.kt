@@ -231,6 +231,7 @@ private fun EditorScreen(
     AppScreen(
         title = fileName,
         subtitle = if (canNav) "Foto ${index + 1} di $total" else null,
+        brand = false,
         onBack = { if (unsaved) askExit = true else onClose() },
         actions = {
             ToolIcon(AppIcons.Undo, "Annulla", { ink.undo() }, enabled = ink.canUndo)
@@ -312,7 +313,7 @@ private fun EditorScreen(
         ) {
             for (f in inputFields) Row(verticalAlignment = Alignment.CenterVertically) {
                 FieldLabel(f.label)
-                CompactField(values[f.id].orEmpty(), { values[f.id] = it }, f.pos.short)
+                ChoiceField(values[f.id].orEmpty(), { values[f.id] = it }, f.pos.short, f.options)
             }
             Row {
                 FieldLabel("Nota", Modifier.padding(top = 10.dp))

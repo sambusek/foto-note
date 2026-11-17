@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,14 +82,21 @@ fun AppScreen(
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: (@Composable () -> Unit)? = null,
+    brand: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     // Surface fornisce sfondo e colore del contenuto (testi e icone) giusti per il tema chiaro o scuro
     Surface(Modifier.fillMaxSize(), color = cs.surface, contentColor = cs.onSurface) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        if (brand) Text(
+            "Pastashoot",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = cs.primary,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+        )
         Row(
-            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
+            Modifier.fillMaxWidth().height(if (brand) 48.dp else 56.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (onBack != null) IconButton(onBack) { Icon(AppIcons.Back, "Indietro") }
@@ -389,3 +397,28 @@ fun Modifier.selectedOverlay(selected: Boolean): Modifier =
 
 /** Spazio tra le miniature delle griglie. */
 val GridGap = 2.dp
+
+/** Campo compatto con, se ci sono [options], un menu a tendina per sceglierne una (si può anche scrivere). */
+@Composable
+fun ChoiceField(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    options: List<String>,
+    modifier: Modifier = Modifier,
+) {
+    if (options.isEmpty()) return CompactField(value, onChange, placeholder, modifier)
+    var open by remember { mutableStateOf(false) }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        CompactField(value, onChange, placeholder, Modifier.weight(1f))
+        Box {
+            IconButton({ open = true }) { Icon(AppIcons.DropDown, "Scegli dall'elenco") }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                for (o in options) DropdownMenuItem(
+                    text = { Text(o, fontWeight = if (o == value) FontWeight.Bold else FontWeight.Normal) },
+                    onClick = { open = false; onChange(o) },
+                )
+            }
+        }
+    }
+}

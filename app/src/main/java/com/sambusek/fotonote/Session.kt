@@ -70,6 +70,7 @@ object SessionStore {
                     x.getString("id"), x.getString("label"), pos, x.optBoolean("showLabel", true),
                     FieldKind.entries.firstOrNull { k -> k.name == x.optString("kind") } ?: FieldKind.INPUT,
                     x.optString("text", ""),
+                    x.optString("choices", ""),
                 )
             },
             items = (0 until it.length()).map { i ->
@@ -86,7 +87,8 @@ object SessionStore {
         for (i in s.items) items.put(JSONObject().put("src", i.src).put("out", i.out).put("name", i.name))
         val fields = JSONArray()
         for (f in s.fields) fields.put(JSONObject().put("id", f.id).put("label", f.label).put("pos", f.pos.name).put("showLabel", f.showLabel)
-                .put("kind", f.kind.name).put("text", f.text))
+                .put("kind", f.kind.name).put("text", f.text)
+                .put("choices", f.choices))
         val o = JSONObject()
             .put("fields", fields)
             .put("id", s.id).put("name", s.name).put("folder", s.folder)
