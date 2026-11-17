@@ -60,6 +60,12 @@ una volta installato, il telefono non accetta più APK firmati con la sola vecch
 Il file e la password vanno conservati in un posto sicuro (es. un gestore di password), fuori dal repository.
 Se si perdono, si genera una chiave nuova: in quel caso l'app va disinstallata e reinstallata una volta.
 
+## Guida all'uso
+
+La guida per chi usa l'app è [GUIDA.md](GUIDA.md), aperta dal pulsante **?** in basso a destra nella Home.
+Per modificarla basta cambiare quel file su GitHub (icona della matita, poi «Commit changes»): l'app
+mostra subito la nuova versione, senza pubblicare un nuovo APK. Le immagini stanno in `docs/`.
+
 ## Struttura
 
 - `MainActivity` — home (sopralluoghi) e impostazioni

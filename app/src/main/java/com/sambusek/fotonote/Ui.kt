@@ -99,6 +99,8 @@ fun AppScreen(
     maxWidth: Dp = Dp.Unspecified,
     /** Se presente, intestazione della Home: marchio grande con questo claim, senza titolo. */
     claim: String? = null,
+    /** Pulsante fluttuante in basso a destra (es. aiuto nella Home). */
+    fab: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // su tablet le schermate di testo restano di larghezza leggibile, centrate
@@ -151,6 +153,7 @@ fun AppScreen(
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Column(narrow.fillMaxHeight(), content = content)
+            if (fab != null) Box(Modifier.align(Alignment.BottomEnd).padding(16.dp)) { fab() }
         }
         if (bottomBar != null) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Box(narrow) { bottomBar() }

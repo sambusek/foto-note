@@ -1,5 +1,7 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.SmallFloatingActionButton
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -75,6 +77,9 @@ import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/** Guida all'uso: il file GUIDA.md del repository, modificabile da GitHub. */
+const val GUIDE_URL = "https://github.com/sambusek/foto-note/blob/main/GUIDA.md"
 
 class MainActivity : ComponentActivity() {
     /** Cresce a ogni ritorno sulla schermata, per rileggere sessioni e permessi. */
@@ -242,6 +247,19 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
     AppScreen(
         title = if (selecting) "${selected.size} selezionati" else "",
         claim = if (selecting) null else "Sopralluoghi meno sbatti dal 2026",
+        fab = if (selecting) null else ({
+            // la guida sta nel repository (GUIDA.md): si aggiorna senza pubblicare una nuova versione
+            SmallFloatingActionButton(
+                onClick = {
+                    runCatching {
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GUIDE_URL)))
+                    }.onFailure { Toast.makeText(ctx, "Nessun browser per aprire la guida", Toast.LENGTH_SHORT).show() }
+                },
+                shape = RoundedCornerShape(8.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) { Text("?", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)) }
+        }),
         onBack = if (selecting) ({ selected.clear() }) else null,
         actions = {
             if (selecting) {
@@ -328,9 +346,9 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
         val scroll = Modifier.verticalScroll(rememberScrollState())
         BoxWithConstraints(Modifier.fillMaxSize()) {
             if (maxWidth >= 720.dp) Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), content = top)
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp), content = saved)
-            } else Column(scroll.padding(start = 12.dp, end = 12.dp, bottom = 16.dp)) {
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 72.dp), content = top)
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 72.dp), content = saved)
+            } else Column(scroll.padding(start = 12.dp, end = 12.dp, bottom = 72.dp)) {
                 top()
                 saved()
             }
