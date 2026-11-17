@@ -1,5 +1,6 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.draw.clipToBounds
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -310,7 +311,8 @@ private fun EditorScreen(
         val side = conf.screenWidthDp >= 720 && conf.screenWidthDp > conf.screenHeightDp
         val photoView: @Composable (Modifier) -> Unit = { photoModifier ->
             Box(
-                photoModifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                // la foto ingrandita non deve uscire dal suo riquadro e coprire i campi
+                photoModifier.clipToBounds().background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center,
             ) {
                 val bmp = bitmap
@@ -338,6 +340,7 @@ private fun EditorScreen(
             // testi: campi del layout di sessione e nota libera
             if (textsOpen) Column(
                 textsModifier
+                    .background(MaterialTheme.colorScheme.surface)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -345,7 +348,8 @@ private fun EditorScreen(
                 for (f in inputFields) Row(verticalAlignment = Alignment.CenterVertically) {
                     FieldLabel(f.label)
                     ChoiceField(
-                        values[f.id].orEmpty(), { values[f.id] = it }, f.pos.short,
+                        values[f.id].orEmpty(), { values[f.id] = it },
+                        if (f.kind == FieldKind.CHOICE && f.options.isNotEmpty()) "Scegli…" else "Scrivi…",
                         if (f.kind == FieldKind.CHOICE) f.options else emptyList(),
                     )
                 }

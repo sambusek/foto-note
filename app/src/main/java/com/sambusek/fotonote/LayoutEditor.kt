@@ -1,5 +1,6 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.draw.rotate
 import android.content.Context
 import android.net.Uri
 import android.widget.Toast
@@ -109,7 +110,11 @@ fun LayoutScreen(
                 fields.forEachIndexed { i, f ->
                     key(f.id) {
                         if (i > 0) ListDivider()
-                        FieldEditor(f, onChange = { fields[i] = it }, onRemove = { fields.removeAt(i) })
+                        FieldEditor(
+                            f, onChange = { fields[i] = it }, onRemove = { fields.removeAt(i) },
+                            onUp = if (i > 0) ({ fields.add(i - 1, fields.removeAt(i)) }) else null,
+                            onDown = if (i < fields.lastIndex) ({ fields.add(i + 1, fields.removeAt(i)) }) else null,
+                        )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -125,13 +130,22 @@ fun LayoutScreen(
 }
 
 @Composable
-private fun FieldEditor(f: NoteField, onChange: (NoteField) -> Unit, onRemove: () -> Unit) {
+private fun FieldEditor(
+    f: NoteField,
+    onChange: (NoteField) -> Unit,
+    onRemove: () -> Unit,
+    onUp: (() -> Unit)? = null,
+    onDown: (() -> Unit)? = null,
+) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // tipo del campo, sempre visibile e modificabile
         Row(verticalAlignment = Alignment.CenterVertically) {
             KindPicker(f.kind, Modifier.weight(1f)) { k ->
                 onChange(f.copy(kind = k, label = f.label.ifBlank { k.defaultLabel }, showLabel = !k.auto))
             }
+            // ordine dei campi: è anche l'ordine nel pannello dell'editor e sulla fascia
+            ToolIcon(AppIcons.Prev, "Sposta su", { onUp?.invoke() }, enabled = onUp != null, modifier = Modifier.rotate(90f))
+            ToolIcon(AppIcons.Next, "Sposta giù", { onDown?.invoke() }, enabled = onDown != null, modifier = Modifier.rotate(90f))
             ToolIcon(AppIcons.Delete, "Elimina campo", onRemove)
         }
         Caption(f.kind.description)
@@ -364,8 +378,9 @@ fun MultiTextDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     for (o in options) FilterChip(selected = text == o, onClick = { text = o }, label = { Text(o) })
+                    FilterChip(selected = text.isEmpty(), onClick = { text = "" }, label = { Text("Nessuna") })
                 }
-                OutlinedTextField(
+                if (options.isEmpty()) OutlinedTextField(
                     value = text, onValueChange = { text = it }, placeholder = { Text("Scrivi qui") },
                     minLines = 2, shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),

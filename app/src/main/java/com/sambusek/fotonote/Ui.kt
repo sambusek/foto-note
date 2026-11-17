@@ -584,17 +584,40 @@ fun ChoiceField(
     modifier: Modifier = Modifier,
 ) {
     if (options.isEmpty()) return CompactField(value, onChange, placeholder, modifier)
+    // si sceglie solo fra le voci dell'elenco: nessun testo libero
     var open by remember { mutableStateOf(false) }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        CompactField(value, onChange, placeholder, Modifier.weight(1f))
-        Box {
-            IconButton({ open = true }) { Icon(AppIcons.DropDown, "Scegli dall'elenco") }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                for (o in options) DropdownMenuItem(
-                    text = { Text(o, fontWeight = if (o == value) FontWeight.Bold else FontWeight.Normal) },
-                    onClick = { open = false; onChange(o) },
-                )
-            }
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(4.dp)
+    Box(modifier) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .clip(shape)
+                .background(cs.surfaceContainerHighest)
+                .border(1.dp, cs.outlineVariant, shape)
+                .clickable { open = true }
+                .padding(start = 10.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                value.ifEmpty { placeholder },
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
+                color = if (value.isEmpty()) cs.onSurfaceVariant else cs.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            Icon(AppIcons.DropDown, "Scegli dall'elenco", tint = cs.onSurfaceVariant)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // un valore che non è (più) nell'elenco resta visibile finché non se ne sceglie un altro
+            for (o in options) DropdownMenuItem(
+                text = { Text(o, fontWeight = if (o == value) FontWeight.Bold else FontWeight.Normal) },
+                onClick = { open = false; onChange(o) },
+            )
+            if (value.isNotEmpty()) DropdownMenuItem(
+                text = { Text("Nessuna scelta", color = cs.onSurfaceVariant) },
+                onClick = { open = false; onChange("") },
+            )
         }
     }
 }
