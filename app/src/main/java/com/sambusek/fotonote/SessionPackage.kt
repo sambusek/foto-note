@@ -46,7 +46,7 @@ object SessionPackage {
             p.uri to file
         }
         // solo ciò che serve a continuare: niente versioni, niente pause, foto già elencate sopra
-        val session = s.copy(excluded = emptySet(), extra = emptyList(), items = emptyList(), versions = emptyList(), pauses = emptyList())
+        val session = s.copy(excluded = emptySet(), extra = emptyList(), removed = emptySet(), items = emptyList(), versions = emptyList(), pauses = emptyList())
         val manifest = JSONObject()
             .put("format", FORMAT).put("version", 1)
             .put("exportedAt", System.currentTimeMillis())
