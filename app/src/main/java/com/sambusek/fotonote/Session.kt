@@ -215,6 +215,7 @@ object SessionStore {
         val f = file(c, s.id)
         f.writeAtomic(s.toJson().toString())
         synchronized(cache) { cache[s.id] = f.lastModified() to s }
+        Backup.changed(c)
     }
 
     /** Tutte le sessioni, la più recente per prima. */
