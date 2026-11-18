@@ -107,7 +107,6 @@ object AnnotationStore {
     fun writeRaw(c: Context, src: Uri, o: JSONObject) {
         o.put("source", src.toString()).put("out", "")
         file(c, src).writeAtomic(o.toString())
-        Backup.changed(c)
     }
 
     fun remove(c: Context, src: Uri) {
@@ -138,7 +137,6 @@ object AnnotationStore {
             .put("updated", System.currentTimeMillis())
             .put("strokes", arr)
         file(c, src).writeAtomic(o.toString())
-        Backup.changed(c)
     }
 }
 

@@ -60,26 +60,6 @@ una volta installato, il telefono non accetta più APK firmati con la sola vecch
 Il file e la password vanno conservati in un posto sicuro (es. un gestore di password), fuori dal repository.
 Se si perdono, si genera una chiave nuova: in quel caso l'app va disinstallata e reinstallata una volta.
 
-## Backup su OneDrive (Microsoft 365)
-
-Impostazioni › **Backup su OneDrive**: i sopralluoghi vengono copiati nella cartella `Pastashoot` del
-OneDrive dell'utente, una sottocartella per sopralluogo con il manifesto (`pastashoot-sopralluogo.json`:
-sessione, campi, disegni, note) e le foto originali in `foto/`. È lo stesso contenuto del pacchetto
-«Esporta per un altro telefono», in file separati: si caricano solo le foto nuove e il manifesto quando
-cambia. Il backup parte una decina di minuti dopo le modifiche e una volta al giorno (WorkManager), di
-norma solo con il Wi-Fi. Il ripristino ricompone il pacchetto e lo importa come sopralluogo in pausa.
-
-Accesso: OAuth 2.0 con PKCE nel browser, senza segreti nell'app (`OneDrive.kt`). L'app va registrata
-una volta in **Microsoft Entra ID** (entra.microsoft.com › Identità › Applicazioni › Registrazioni app):
-
-- tipi di account: solo questa directory (oppure qualsiasi directory dell'organizzazione);
-- piattaforma **Applicazioni per dispositivi mobili e desktop**, URI di reindirizzamento
-  `com.sambusek.fotonote://auth`;
-- autorizzazioni delegate di Microsoft Graph: `Files.ReadWrite`, `User.Read`, `offline_access`.
-
-L'ID applicazione (client) e l'ID directory (tenant) si inseriscono in Impostazioni › Backup ›
-Configurazione, oppure come valori predefiniti in `OneDrive.DEFAULT_CLIENT_ID` / `DEFAULT_TENANT`.
-
 ## Guida all'uso
 
 La guida per chi usa l'app è [GUIDA.md](GUIDA.md), aperta dal pulsante **?** in basso a destra nella Home.

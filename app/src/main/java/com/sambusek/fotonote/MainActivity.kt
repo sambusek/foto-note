@@ -89,8 +89,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         Notifications.createChannels(this)
-        OneDrive.load(this)
-        Backup.reschedule(this)
         if (Prefs.isMonitoring(this) && MediaHelper.hasPhotoPermission(this)) ServiceControl.start(this)
         importTemplate(intent)
         setContent {
@@ -529,8 +527,6 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
                 )
             }
 
-            CloudBackupSection(t, onChanged = { tick.intValue++ })
-
             Section("Template di sopralluogo") {
                 val n = remember(t) { TemplateStore.all(ctx).size }
                 Caption(
@@ -636,135 +632,5 @@ private fun PermRow(label: String, ok: Boolean, onFix: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         AppButton(if (ok) "Apri" else "Concedi", onFix, primary = !ok)
-    }
-}
-
-
-/** Impostazioni › Backup su OneDrive: collegamento dell'account, backup e ripristino. */
-@Composable
-private fun CloudBackupSection(t: Int, onChanged: () -> Unit) {
-    val ctx = LocalContext.current
-    val account = OneDrive.account
-    var auto by remember { mutableStateOf(Backup.enabled(ctx)) }
-    var wifiOnly by remember { mutableStateOf(Backup.wifiOnly(ctx)) }
-    var showSetup by remember { mutableStateOf(!OneDrive.configured(ctx)) }
-    var clientId by remember { mutableStateOf(OneDrive.clientId(ctx)) }
-    var tenant by remember { mutableStateOf(OneDrive.tenant(ctx)) }
-    var restoreList by remember { mutableStateOf<List<Backup.Remote>?>(null) }
-    var loadingList by remember { mutableStateOf(false) }
-    var askRestore by remember { mutableStateOf<Backup.Remote?>(null) }
-    val scope = rememberCoroutineScope()
-    val fmt = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY) }
-    val lastOk = remember(t, SessionOps.busy) { Backup.lastOk(ctx) }
-    val lastError = remember(t, SessionOps.busy) { Backup.lastError(ctx) }
-
-    Section("Backup su OneDrive") {
-        when {
-            !OneDrive.configured(ctx) -> Caption(
-                "Per attivarlo serve l'ID dell'app registrata in Microsoft 365 (vedi «Configurazione» qui sotto)."
-            )
-            account == null -> {
-                Caption(
-                    "Collega il tuo account Microsoft 365: i sopralluoghi vengono copiati nella cartella " +
-                        "«${OneDrive.ROOT}» del tuo OneDrive e puoi ripristinarli su un altro telefono."
-                )
-                AppButton(
-                    "Collega l'account Microsoft", { (ctx as? android.app.Activity)?.let { OneDrive.signIn(it) } },
-                    Modifier.fillMaxWidth().padding(top = 8.dp), primary = true,
-                )
-            }
-            else -> {
-                Text(account, style = MaterialTheme.typography.titleSmall)
-                Caption(
-                    when {
-                        lastError != null -> "Ultimo backup non riuscito: $lastError"
-                        lastOk > 0 -> "Ultimo backup: ${fmt.format(Date(lastOk))}"
-                        else -> "Nessun backup ancora eseguito."
-                    }
-                )
-                SwitchRow("Backup automatico", auto, { auto = !auto; Backup.setEnabled(ctx, auto) })
-                SwitchRow("Solo con il Wi-Fi", wifiOnly, { wifiOnly = !wifiOnly; Backup.setWifiOnly(ctx, wifiOnly) }, enabled = auto)
-                Caption("Il backup parte qualche minuto dopo le modifiche e comunque una volta al giorno; carica solo le foto nuove.")
-                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppButton("Esegui ora", {
-                        SessionOps.backupNow(ctx) { r ->
-                            onChanged()
-                            Toast.makeText(
-                                ctx,
-                                r.fold({ n -> if (n == 0) "Backup aggiornato" else "Backup completato: $n foto caricate" },
-                                    { "Backup non riuscito: ${it.message}" }),
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                    }, Modifier.weight(1f), primary = true)
-                    AppButton("Ripristina…", {
-                        loadingList = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.IO) { runCatching { Backup.listRemote(ctx) } }
-                            loadingList = false
-                            r.onSuccess { restoreList = it }
-                                .onFailure { Toast.makeText(ctx, "OneDrive non raggiungibile: ${it.message}", Toast.LENGTH_LONG).show() }
-                        }
-                    }, Modifier.weight(1f), enabled = !loadingList)
-                }
-                TextButton({ OneDrive.signOut(ctx); Backup.reschedule(ctx); onChanged() }) { Text("Scollega l'account") }
-            }
-        }
-        TextButton({ showSetup = !showSetup }) { Text(if (showSetup) "Nascondi configurazione" else "Configurazione") }
-        if (showSetup) {
-            CompactField(clientId, { clientId = it; OneDrive.setClientId(ctx, it) }, "ID applicazione (client)")
-            Spacer(Modifier.height(6.dp))
-            CompactField(tenant, { tenant = it; OneDrive.setTenant(ctx, it) }, "ID directory (tenant) oppure organizations")
-            Caption(
-                "Dati dell'app registrata in Microsoft Entra ID (portale di Microsoft 365). " +
-                    "Indirizzo di reindirizzamento: ${OneDrive.REDIRECT}",
-                Modifier.padding(top = 4.dp),
-            )
-        }
-    }
-
-    restoreList?.let { list ->
-        AlertDialog(
-            onDismissRequest = { restoreList = null },
-            shape = RoundedCornerShape(12.dp),
-            title = { Text("Ripristina da OneDrive") },
-            text = {
-                if (list.isEmpty()) Text("Nella cartella «${OneDrive.ROOT}» non ci sono ancora sopralluoghi.")
-                else Column(Modifier.verticalScroll(rememberScrollState())) {
-                    Caption("Il sopralluogo scelto torna sul telefono in pausa, con foto, disegni, campi e note.")
-                    list.forEachIndexed { i, r ->
-                        if (i > 0) ListDivider()
-                        ListRow(
-                            r.name,
-                            "${r.photos} foto · backup del ${fmt.format(Date(r.backupAt))}",
-                            tags = if (r.closed) listOf("Chiuso" to false) else emptyList(),
-                        ) { askRestore = r }
-                    }
-                }
-            },
-            confirmButton = { TextButton({ restoreList = null }) { Text("Chiudi") } },
-        )
-    }
-    askRestore?.let { r ->
-        val exists = remember(r) { SessionStore.all(ctx).any { it.folder == r.folder } }
-        ConfirmDialog(
-            title = "Ripristinare «${r.name}»?",
-            text = "Vengono scaricate ${r.photos} foto in Immagini › Pastashoot › Importati." +
-                (if (exists) " Sul telefono c'è già un sopralluogo con questo nome: avrai due copie." else ""),
-            confirm = "Ripristina",
-            onConfirm = {
-                askRestore = null; restoreList = null
-                SessionOps.restoreFromCloud(ctx, r.folder) { res ->
-                    onChanged()
-                    Toast.makeText(
-                        ctx,
-                        res.fold({ "«${it.name}» ripristinato: lo trovi fra quelli in pausa" }, { "Ripristino non riuscito: ${it.message}" }),
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-            },
-            dismiss = "Annulla",
-            onDismiss = { askRestore = null },
-        )
     }
 }

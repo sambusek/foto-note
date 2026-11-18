@@ -27,24 +27,17 @@ object SessionPackage {
         c.contentResolver.openInputStream(uri)?.use { val b = ByteArray(2); it.read(b) == 2 && b[0] == 'P'.code.toByte() && b[1] == 'K'.code.toByte() }
     }.getOrNull() == true
 
-    const val MANIFEST_NAME = MANIFEST
-
-    /**
-     * Manifesto di un sopralluogo e foto da allegare (uri → nome del file nel pacchetto).
-     * [fileName] decide il nome di ogni foto: numerato nel pacchetto, stabile nel backup.
-     */
-    fun manifest(
-        c: Context,
-        s: Session,
-        fileName: (index: Int, photo: Photo, name: String) -> String = { i, _, name ->
-            "foto/" + (i + 1).toString().padStart(3, '0') + "_" + name
-        },
-    ): Pair<JSONObject, List<Pair<Uri, String>>> {
+    /** Crea il pacchetto della sessione [s] nella cartella di condivisione. */
+    fun export(c: Context, s: Session, onProgress: (Float) -> Unit): File {
         val photos = SessionStore.photos(c, s).filter { it.uri.toString() !in s.excluded }
+        val dir = File(c.cacheDir, "share").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() }
+        val out = File(dir, "${s.folder}.pastashoot.zip")
+
         val entries = JSONArray()
         val files = photos.mapIndexed { i, p ->
             val name = MediaHelper.displayName(c.contentResolver, p.uri) ?: "foto_${i + 1}.jpg"
-            val file = fileName(i, p, name)
+            val file = "foto/" + (i + 1).toString().padStart(3, '0') + "_" + name
             entries.put(
                 JSONObject().put("file", file).put("name", name)
                     .put("taken", MediaHelper.takenMillis(c.contentResolver, p.uri))
@@ -60,15 +53,6 @@ object SessionPackage {
             .put("originalStart", s.start)
             .put("session", session.toJson())
             .put("photos", entries)
-        return manifest to files
-    }
-
-    /** Crea il pacchetto della sessione [s] nella cartella di condivisione. */
-    fun export(c: Context, s: Session, onProgress: (Float) -> Unit): File {
-        val dir = File(c.cacheDir, "share").apply { mkdirs() }
-        dir.listFiles()?.forEach { it.delete() }
-        val out = File(dir, "${s.folder}.pastashoot.zip")
-        val (manifest, files) = manifest(c, s)
 
         ZipOutputStream(BufferedOutputStream(FileOutputStream(out))).use { zos ->
             zos.putNextEntry(ZipEntry(MANIFEST))
