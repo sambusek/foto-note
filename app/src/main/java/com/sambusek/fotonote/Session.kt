@@ -39,6 +39,12 @@ class Release(val label: String, val folder: String, val time: Long, val items: 
     val number: Int? get() = Regex("_v(\\d+)$").find(folder)?.groupValues?.get(1)?.toIntOrNull()
 }
 
+/**
+ * Precompilazione dei campi per i nuovi scatti, valida da [time] fino alla successiva
+ * ([values] vuoto = precompilazione disattivata). Es. dalle 10:12 "Piano" = 3, "Affaccio" = Gonzaga.
+ */
+data class Preset(val time: Long, val values: Map<String, String>)
+
 /** Una pausa della sessione; [end] = 0 se è ancora in corso. */
 data class Pause(val start: Long, val end: Long = 0L)
 
@@ -69,7 +75,14 @@ data class Session(
     val generalNote: String = "",
     /** Pause: le foto scattate durante una pausa non entrano nel sopralluogo. */
     val pauses: List<Pause> = emptyList(),
+    /** Storia delle precompilazioni: ogni foto prende quella valida al momento dello scatto. */
+    val presets: List<Preset> = emptyList(),
 ) {
+    /** Valori precompilati per una foto scattata a [ms]. */
+    fun presetAt(ms: Long): Map<String, String> = presets.lastOrNull { it.time <= ms }?.values.orEmpty()
+    /** Precompilazione attiva ora. */
+    val currentPreset: Map<String, String> get() = presets.lastOrNull()?.values.orEmpty()
+
     val open: Boolean get() = end == 0L
     val paused: Boolean get() = open && pauses.lastOrNull()?.end == 0L
     fun inPause(ms: Long): Boolean = pauses.any { ms >= it.start && (it.end == 0L || ms <= it.end) }
@@ -140,6 +153,9 @@ internal fun Session.toJson(): JSONObject {
         .put("zipPattern", zipPattern)
         .put("generalNote", generalNote)
         .put("pauses", JSONArray().also { a -> pauses.forEach { a.put(JSONArray().put(it.start).put(it.end)) } })
+        .put("presets", JSONArray().also { a ->
+            presets.forEach { a.put(JSONObject().put("time", it.time).put("values", JSONObject(it.values as Map<*, *>))) }
+        })
 }
 
 internal fun sessionFromJson(o: JSONObject): Session {
@@ -167,6 +183,12 @@ internal fun sessionFromJson(o: JSONObject): Session {
         generalNote = o.optString("generalNote", ""),
         pauses = o.optJSONArray("pauses")?.let { a ->
             (0 until a.length()).map { val p = a.getJSONArray(it); Pause(p.getLong(0), p.optLong(1, 0L)) }
+        }.orEmpty(),
+        presets = o.optJSONArray("presets")?.let { a ->
+            (0 until a.length()).map {
+                val p = a.getJSONObject(it)
+                Preset(p.getLong("time"), p.optJSONObject("values")?.stringMap().orEmpty())
+            }
         }.orEmpty(),
     )
 }
@@ -358,7 +380,8 @@ object SessionOps {
             runCatching {
                 val a = AnnotationStore.load(c, p.uri)
                 val taken = MediaHelper.takenMillis(c.contentResolver, p.uri)
-                val values = AutoFields.resolve(s.fields, a?.values.orEmpty(), s.name, taken, user)
+                // i valori scritti sulla foto prevalgono sulla precompilazione del momento dello scatto
+                val values = AutoFields.resolve(s.fields, s.presetAt(taken) + a?.values.orEmpty(), s.name, taken, user)
                 val (out, name) = AnnotationIO.exportTo(
                     c, p.uri, a?.strokes.orEmpty(), a?.note.orEmpty(), relPath, s.fields, values, a?.pad ?: Pad(),
                 )

@@ -1,5 +1,7 @@
 package com.sambusek.fotonote
 
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.material3.Switch
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import android.content.Context
@@ -123,6 +125,23 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     fun refresh() { tick.intValue++ }
 
     val photos = remember(t) { SessionStore.photos(ctx, s) }
+    // campi che si possono precompilare per i nuovi scatti
+    val presetFields = s.fields.filter { it.kind == FieldKind.INPUT || it.kind == FieldKind.CHOICE }
+    var editPreset by remember { mutableStateOf(false) }
+    if (editPreset) PresetDialog(
+        presetFields, s.currentPreset,
+        onSave = { v ->
+            editPreset = false
+            val now = SessionStore.get(ctx, s.id) ?: s
+            SessionStore.save(ctx, now.copy(presets = now.presets + Preset(System.currentTimeMillis(), v)))
+            refresh()
+            Toast.makeText(
+                ctx, if (v.isEmpty()) "Precompilazione disattivata" else "Precompilazione attiva per i prossimi scatti",
+                Toast.LENGTH_SHORT,
+            ).show()
+        },
+        onDismiss = { editPreset = false },
+    )
     val annotated by produceState(emptySet<String>(), photos, t) {
         value = withContext(Dispatchers.IO) {
             photos.filter { AnnotationStore.hasContent(ctx, it.uri) }.map { it.uri.toString() }.toSet()
@@ -300,6 +319,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                 OverflowMenu(
                     listOfNotNull(
                         if (s.versions.isNotEmpty()) "Versioni emesse (${s.versions.size})…" to { showReleases = true } else null,
+                        if (presetFields.isNotEmpty()) "Precompila i campi…" to { editPreset = true } else null,
                         "Nota generale…" to { editNote = true },
                         "Aggiungi foto già scattate…" to { picking = true },
                         "Layout delle note…" to { layoutEdit = true },
@@ -328,6 +348,13 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
             AppIcons.Pause,
             "In pausa dalle ${timeFmt.format(Date(s.pauses.last().start))}: le foto scattate ora non entrano nel sopralluogo.",
             action = "Riprendi", onAction = { SessionStore.togglePause(ctx, s); refresh() },
+        )
+        val preset = s.currentPreset.filterKeys { k -> presetFields.any { it.id == k } }
+        if (preset.isNotEmpty() && !selecting) InfoBanner(
+            AppIcons.Tune,
+            "Precompilati per i nuovi scatti: " + presetFields.filter { it.id in preset }
+                .joinToString(" · ") { "${it.label.ifBlank { "Campo" }} ${preset[it.id]}" },
+            action = "Modifica", onAction = { editPreset = true },
         )
         if (s.generalNote.isNotBlank() && !selecting) Text(
             "Nota generale: ${s.generalNote}",
@@ -363,7 +390,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                                         ctx, "Foto esclusa dalle versioni: tienila premuta per riammetterla", Toast.LENGTH_SHORT
                                     ).show()
                                     selecting -> if (isSelected) selected.remove(key) else selected.add(key)
-                                    else -> ctx.startActivity(EditorActivity.intent(ctx, p.uri))
+                                    else -> ctx.startActivity(EditorActivity.intent(ctx, p.uri, s.id))
                                 }
                             },
                             onLongClick = { if (!selecting) menu = true },
@@ -621,5 +648,50 @@ private fun ZipNameDialog(s: Session, r: Release, onConfirm: (String) -> Unit, o
         },
         confirmButton = { TextButton({ onConfirm(pattern) }) { Text("Crea ZIP") } },
         dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
+    )
+}
+
+
+/** Sceglie i valori da precompilare sui prossimi scatti; un campo spento non viene precompilato. */
+@Composable
+private fun PresetDialog(
+    fields: List<NoteField>,
+    current: Map<String, String>,
+    onSave: (Map<String, String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val values = remember { mutableStateMapOf<String, String>().apply { putAll(current) } }
+    val on = remember { mutableStateMapOf<String, Boolean>().apply { current.keys.forEach { put(it, true) } } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        title = { Text("Precompila i campi") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Caption("Valgono per le foto che scatti da ora, finché non li cambi o li spegni. Sulla singola foto puoi sempre correggerli.")
+                for (f in fields) Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(f.label.ifBlank { "Campo senza nome" }, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                        Switch(on[f.id] == true, { on[f.id] = it })
+                    }
+                    if (on[f.id] == true) {
+                        if (f.kind == FieldKind.CHOICE && f.options.isNotEmpty())
+                            ChoiceField(values[f.id].orEmpty(), { values[f.id] = it }, "Scegli…", f.options, Modifier.fillMaxWidth())
+                        else CompactField(values[f.id].orEmpty(), { values[f.id] = it }, "Scrivi…", Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({
+                onSave(fields.filter { on[it.id] == true }.mapNotNull { f -> values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let { f.id to it } }.toMap())
+            }) { Text("Applica") }
+        },
+        dismissButton = {
+            Row {
+                if (current.isNotEmpty()) TextButton({ onSave(emptyMap()) }) { Text("Spegni tutto") }
+                TextButton(onDismiss) { Text("Annulla") }
+            }
+        },
     )
 }

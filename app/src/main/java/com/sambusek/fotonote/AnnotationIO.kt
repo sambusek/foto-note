@@ -119,7 +119,8 @@ object AnnotationStore {
         pad: Pad? = null,
     ) {
         val old = if (values == null || pad == null) load(c, src) else null
-        val vals = (values ?: old?.values ?: emptyMap()).filterValues { it.isNotBlank() }
+        // un valore vuoto resta: serve a svuotare su una foto un campo precompilato
+        val vals = values ?: old?.values ?: emptyMap()
         val pd = pad ?: old?.pad ?: Pad()
         val arr = JSONArray()
         for (s in strokes) {

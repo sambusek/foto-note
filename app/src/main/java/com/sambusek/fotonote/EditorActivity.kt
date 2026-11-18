@@ -68,7 +68,9 @@ import kotlin.math.roundToInt
 class EditorActivity : ComponentActivity() {
 
     companion object {
-        fun intent(c: Context, uri: Uri): Intent = Intent(c, EditorActivity::class.java).setData(uri)
+        /** [sessionId]: il sopralluogo da cui si apre la foto (anche se in pausa). */
+        fun intent(c: Context, uri: Uri, sessionId: String? = null): Intent =
+            Intent(c, EditorActivity::class.java).setData(uri).apply { if (sessionId != null) putExtra("session", sessionId) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,7 +81,10 @@ class EditorActivity : ComponentActivity() {
             else intent.data
             ) ?: return finish()
         setContent {
-            val session = remember { SessionStore.sessionFor(this, uri) }
+            val session = remember {
+                intent.getStringExtra("session")?.let { SessionStore.get(this, it) }?.takeIf { it.open }
+                    ?: SessionStore.sessionFor(this, uri)
+            }
             // le foto della sessione, per passare dall'una all'altra senza uscire
             val list = remember {
                 session?.let { s -> SessionStore.photos(this, s).map { it.uri }.filter { it.toString() !in s.excluded } }
@@ -138,6 +143,7 @@ private fun EditorScreen(
     var savedNote by remember { mutableStateOf("") }
     val values = remember { mutableStateMapOf<String, String>() }   // campi del layout
     var savedValues by remember { mutableStateOf(emptyMap<String, String>()) }
+    var presetKeys by remember { mutableStateOf(emptySet<String>()) }
     val vals = values.toMap().filterValues { it.isNotBlank() }
     var textsOpen by remember { mutableStateOf(inputFields.isNotEmpty()) }
     var stylusOnly by remember { mutableStateOf(Prefs.stylusOnly(ctx)) }
@@ -162,11 +168,21 @@ private fun EditorScreen(
             val (bmp, saved) = withContext(Dispatchers.IO) {
                 AnnotationIO.loadBitmap(ctx.contentResolver, uri) to AnnotationStore.load(ctx, uri)
             }
+            // precompilazione valida al momento dello scatto (solo per i campi da compilare)
+            val preset = session?.let { s ->
+                val taken = withContext(Dispatchers.IO) { MediaHelper.takenMillis(ctx.contentResolver, uri) }
+                val ids = s.fields.filter { it.kind == FieldKind.INPUT || it.kind == FieldKind.CHOICE }.map { it.id }.toSet()
+                s.presetAt(taken).filterKeys { it in ids }
+            }.orEmpty()
+            values.putAll(preset)
+            presetKeys = preset.keys
+            // la sola precompilazione non conta come modifica da salvare
+            savedValues = preset.filterValues { it.isNotBlank() }
             if (saved != null) {
                 ink.restore(saved.strokes, saved.pad)
                 note = saved.note; savedNote = saved.note
                 values.putAll(saved.values)
-                savedValues = saved.values.filterValues { it.isNotBlank() }
+                savedValues = (preset + saved.values).filterValues { it.isNotBlank() }
                 if (saved.note.isNotBlank()) textsOpen = true
             }
             bitmap = bmp
@@ -191,10 +207,12 @@ private fun EditorScreen(
     }
 
     suspend fun saveDraft() {
-        val (strokes, text, v) = Triple(ink.strokes, note, vals)
+        // un campo precompilato svuotato a mano si salva vuoto, così la precompilazione non lo riempie di nuovo
+        val cleared = values.filterValues { it.isBlank() }.keys.filter { it in presetKeys }.associateWith { "" }
+        val (strokes, text, v) = Triple(ink.strokes, note, vals + cleared)
         val pad = ink.pad
         withContext(Dispatchers.IO) { AnnotationStore.saveDraft(ctx, uri, text, strokes, v, pad) }
-        ink.dirty = false; savedNote = text; savedValues = v
+        ink.dirty = false; savedNote = text; savedValues = v.filterValues { it.isNotBlank() }
     }
 
     fun save(share: Boolean) {

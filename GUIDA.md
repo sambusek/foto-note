@@ -21,6 +21,17 @@ Un sopralluogo raccoglie da solo tutte le foto scattate con la fotocamera del te
 4. Tieni premuta una foto per due scelte: **Escludi dalle versioni** la lascia nel sopralluogo ma fuori da versioni e consolidamento; **Togli dal sopralluogo** la fa sparire dalla griglia, ma resta nella Galleria del telefono. Per riaverla usa **Aggiungi foto già scattate…**.
 5. Per una pausa (pranzo, foto personali) tocca **Metti in pausa**: gli scatti fatti in pausa restano fuori. Riprendi quando torni in cantiere.
 
+### Precompilare i campi mentre scatti
+
+Se scatti molte foto nello stesso punto, puoi far compilare da soli i campi dei prossimi scatti. Esempio: al terzo piano lato via Gonzaga.
+
+1. Nel sopralluogo apri ⋮ › **Precompila i campi…**, accendi «Piano» e scegli 3, accendi «Affaccio» e scrivi Gonzaga, poi **Applica**.
+2. Scatta: ogni nuova foto ha già Piano 3 e Affaccio Gonzaga. Una fascia in alto ricorda cosa è attivo.
+3. Passi al lato via Mazzini: tocca **Modifica** sulla fascia e cambia solo l'affaccio. Le foto già scattate restano con Gonzaga.
+4. Per smettere, spegni i singoli campi o tocca **Spegni tutto**.
+
+Sulla singola foto puoi sempre correggere o svuotare un valore precompilato.
+
 ### Più cantieri nella stessa giornata
 
 Puoi tenere aperti più sopralluoghi, ma uno solo alla volta raccoglie le foto. Esempio: inizi nel cantiere A, poi vai nel cantiere B.
