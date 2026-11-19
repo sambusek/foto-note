@@ -82,7 +82,7 @@ fun PhotoOrder.apply(items: List<SessionItem>): List<SessionItem> = when (mode) 
     }.map { it.value }
     "manual" -> {
         val pos = manual.withIndex().associate { it.value to it.index }
-        items.withIndex().sortedWith(compareBy({ pos[it.value.source] ?: Int.MAX_VALUE }, { it.index })).map { it.value }
+        items.withIndex().sortedWith(compareBy({ pos[it.value.src] ?: Int.MAX_VALUE }, { it.index })).map { it.value }
     }
     else -> items
 }
@@ -515,7 +515,7 @@ object SessionOps {
             val s = SessionStore.get(c, id)!!
             val r0 = s.releases.first { it.folder == folder }
             // foto nell'ordine scelto: vale per il report e per la numerazione {N} dello ZIP
-            val r = r0.copy(items = s.photoOrder.apply(r0.items))
+            val r = Release(r0.label, r0.folder, r0.time, s.photoOrder.apply(r0.items), r0.note)
             val dir = File(c.cacheDir, "share").apply { mkdirs() }
             dir.listFiles()?.forEach { it.delete() }
             val f = File(dir, r.folder + if (pdf) ".pdf" else ".zip")

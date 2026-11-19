@@ -622,7 +622,7 @@ private fun rememberExport(s: Session): (Release, Boolean) -> Unit {
     zipFor?.let { r ->
         val now = SessionStore.get(ctx, s.id) ?: s
         ZipNameDialog(
-            now, r.copy(items = now.photoOrder.apply(r.items)),
+            now, Release(r.label, r.folder, r.time, now.photoOrder.apply(r.items), r.note),
             onConfirm = { pattern -> zipFor = null; doExport(r, false, pattern) },
             onDismiss = { zipFor = null },
         )
@@ -761,7 +761,7 @@ private fun OrderDialog(s: Session, r: Release, onConfirm: (PhotoOrder) -> Unit,
                     "manual" -> {
                         Caption("Sposta le foto con le frecce.", Modifier.padding(top = 8.dp, bottom = 4.dp))
                         LazyColumn(Modifier.heightIn(max = 380.dp)) {
-                            itemsIndexed(manual, key = { _, it -> it.source }) { i, item ->
+                            itemsIndexed(manual, key = { _, it -> it.src }) { i, item ->
                                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text("${i + 1}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(26.dp))
                                     PhotoThumb(Uri.parse(item.out), Modifier.size(44.dp))
@@ -785,7 +785,7 @@ private fun OrderDialog(s: Session, r: Release, onConfirm: (PhotoOrder) -> Unit,
                     PhotoOrder(
                         mode, keys.toList(),
                         // l'ordine a mano si conserva anche se poi si sceglie un altro criterio
-                        if (mode == "manual") manual.map { it.source } else s.photoOrder.manual,
+                        if (mode == "manual") manual.map { it.src } else s.photoOrder.manual,
                     )
                 )
             }) { Text("Avanti") }
