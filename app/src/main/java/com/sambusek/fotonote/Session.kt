@@ -163,7 +163,7 @@ private fun List<SessionItem>.toJson() = JSONArray().also { a -> forEach { a.put
 internal fun NoteField.toJson() = JSONObject()
     .put("id", id).put("label", label).put("pos", pos.name).put("showLabel", showLabel)
     .put("kind", kind.name).put("text", text).put("choices", choices)
-    .put("parts", JSONArray(parts)).put("separator", separator).put("onBand", onBand)
+    .put("parts", JSONArray(parts)).put("separator", separator)
 
 internal fun fieldFromJson(x: JSONObject): NoteField {
     val choices = x.optString("choices", "")
@@ -175,7 +175,6 @@ internal fun fieldFromJson(x: JSONObject): NoteField {
         x.optBoolean("showLabel", true), kind, x.optString("text", ""), choices,
         parts = x.optJSONArray("parts")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
         separator = x.optString("separator", "_"),
-        onBand = x.optBoolean("onBand", true),
     )
 }
 

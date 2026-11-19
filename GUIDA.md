@@ -70,7 +70,7 @@ Il layout decide quali campi compaiono sulle foto e dove. Lo imposti per ogni so
 
 Ogni campo va in una fascia, sopra o sotto la foto, e in una posizione: sinistra, centro o destra. L'anteprima nel layout mostra dove cade. Per ogni campo puoi mostrare o nascondere l'etichetta prima del testo. Con le frecce su e giù accanto a ogni campo ne cambi l'ordine: è l'ordine in cui compaiono nell'editor e sulla fascia.
 
-**Campi concatenati.** Il tipo «Campi concatenati» unisce più campi in una riga sola, con un separatore: per esempio Piano, Zona e Progressivo diventano `3_Bagno_012`. Spegnendo «Stampa sulla foto» sui singoli campi, sulla fascia compare solo il codice unito, ma i campi restano separati per i nomi dello ZIP e per l'ordinamento.
+**Campi concatenati.** Nel layout tieni premuto il nome di un campo: si apre la selezione. Scegli i campi da unire (es. Piano, Zona, Progressivo) e tocca **Concatena**: nasce un gruppo che sulla foto stampa una sola riga, per esempio `3_Bagno_012`. Nel gruppo scegli l'ordine dei campi e il separatore; il cestino lo scioglie. I campi del gruppo si compilano sempre separati e restano disponibili, uno per uno, per i nomi dello ZIP e per l'ordinamento.
 
 I template si gestiscono da Impostazioni › **Template di sopralluogo**. Si possono condividere e importare su un altro telefono; con **Copia i campi da…** riprendi i campi di un altro sopralluogo o template.
 

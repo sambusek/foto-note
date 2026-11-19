@@ -33,7 +33,7 @@ enum class FieldKind(
     USER("Nome utente", "Automatico: il tuo nome, impostato nell'app", "Redatto da", FieldPos.BR),
     FIXED("Etichetta fissa", "Automatico: lo stesso testo su tutte le foto", "Etichetta", FieldPos.TR),
     COMBINED(
-        "Campi concatenati", "Automatico: unisce altri campi in una sola riga, es. 3_Bagno_012",
+        "Gruppo concatenato", "Unisce i campi scelti in una sola riga, es. 3_Bagno_012",
         "Codice", FieldPos.BOTTOM,
     );
 
@@ -58,8 +58,6 @@ data class NoteField(
     /** Campi uniti da un [FieldKind.COMBINED], nell'ordine, e il separatore fra i valori. */
     val parts: List<String> = emptyList(),
     val separator: String = "_",
-    /** Falso: il campo resta un dato (editor, nomi dello ZIP, ordinamento) ma non si stampa sulla foto. */
-    val onBand: Boolean = true,
 ) {
     val auto: Boolean get() = kind.auto
     val options: List<String> get() = choices.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -148,6 +146,10 @@ class Strip private constructor(
  * Tutti i testi di una foto, sempre nello spazio aggiunto e mai sopra la foto.
  * La nota libera va nella banda inferiore (al centro); i campi nella casella scelta.
  */
+/** Campi che fanno parte di un gruppo concatenato. */
+fun grouped(fields: List<NoteField>): Set<String> =
+    fields.filter { it.kind == FieldKind.COMBINED }.flatMap { it.parts }.toSet()
+
 class Overlay private constructor(private val top: Strip?, private val bottom: Strip?) {
     val topH: Int get() = top?.height ?: 0
     val bottomH: Int get() = bottom?.height ?: 0
@@ -160,7 +162,8 @@ class Overlay private constructor(private val top: Strip?, private val bottom: S
 
     companion object {
         private fun lines(pos: FieldPos, fields: List<NoteField>, values: Map<String, String>): List<String> =
-            fields.filter { it.pos == pos && it.onBand }.mapNotNull { f ->
+            // i campi uniti in un gruppo si stampano solo dentro il gruppo
+            fields.filter { it.pos == pos && it.id !in grouped(fields) }.mapNotNull { f ->
                 values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     if (f.showLabel && f.label.isNotBlank()) "${f.label.trim()}: $it" else it
                 }
