@@ -1,7 +1,7 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.material3.Checkbox
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.draw.rotate
@@ -107,66 +107,88 @@ fun LayoutScreen(
             }
             Section("Schema") { LayoutPreview(fields) }
             Section("Campi") {
-                var selecting by remember { mutableStateOf(false) }
+                // modalità "Concatena": si scelgono i campi da riunire in un gruppo
+                var concat by remember { mutableStateOf(false) }
                 val picked = remember { mutableStateListOf<String>() }
                 if (fields.isEmpty()) Caption(
                     "Nessun campo: sulle foto ci sarà solo la nota, nella banda inferiore. " +
                         "Aggiungi un campo o copia lo schema di un template o di un sopralluogo precedente."
                 )
                 val inGroup = grouped(fields)
-                if (selecting) {
-                    // selezione di più campi per unirli in un gruppo
+                // blocchi della lista: i gruppi (con i loro campi) e i campi singoli
+                val blocks = fields.filter { it.id !in inGroup }
+                val free = blocks.filter { it.kind != FieldKind.COMBINED }
+
+                /** Ricompone la lista: ogni gruppo seguito dai suoi campi, nell'ordine del gruppo. */
+                fun rebuild(order: List<NoteField>) {
+                    val byId = fields.associateBy { it.id }
+                    val out = order.flatMap { bl ->
+                        val cur = byId[bl.id] ?: bl
+                        if (cur.kind == FieldKind.COMBINED) listOf(cur) + cur.parts.mapNotNull { byId[it] } else listOf(cur)
+                    }
+                    fields.clear(); fields.addAll(out)
+                }
+                fun replace(f: NoteField) { val i = fields.indexOfFirst { it.id == f.id }; if (i >= 0) fields[i] = f }
+                fun removeField(id: String) {
+                    fields.removeAll { it.id == id }
+                    fields.replaceAll { o -> if (id in o.parts) o.copy(parts = o.parts - id) else o }
+                }
+                fun moveBlock(i: Int, d: Int) = rebuild(blocks.toMutableList().apply { add(i + d, removeAt(i)) })
+
+                if (concat) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${picked.size} selezionati", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        BarAction("Annulla", { selecting = false; picked.clear() })
-                        AppButton("Concatena", {
-                            val members = fields.filter { it.id in picked }
-                            val first = fields.indexOfFirst { it.id in picked }
-                            fields.add(
-                                first,
-                                NoteField(
-                                    System.nanoTime().toString(), "Codice", members.first().pos,
-                                    showLabel = false, kind = FieldKind.COMBINED, parts = members.map { it.id },
-                                ),
+                        Text("Scegli i campi da concatenare", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                        BarAction("Annulla", { concat = false; picked.clear() })
+                        AppButton("Fine", {
+                            val members = free.filter { it.id in picked }
+                            val n = fields.count { it.kind == FieldKind.COMBINED } + 1
+                            val group = NoteField(
+                                System.nanoTime().toString(), "Gruppo $n", members.first().pos,
+                                showLabel = false, kind = FieldKind.COMBINED, parts = members.map { it.id },
                             )
-                            selecting = false; picked.clear()
+                            // il gruppo prende il posto del primo campo scelto
+                            val at = blocks.indexOfFirst { it.id in picked }
+                            rebuild(blocks.filter { it.id !in picked }.toMutableList().apply { add(at.coerceAtMost(size), group) })
+                            concat = false; picked.clear()
                         }, primary = true, enabled = picked.size >= 2)
                     }
-                    fields.forEachIndexed { i, f ->
+                    free.forEachIndexed { i, f ->
                         key(f.id) {
                             if (i > 0) ListDivider()
-                            // si possono unire solo campi non ancora in un gruppo
-                            val can = f.kind != FieldKind.COMBINED && f.id !in inGroup
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .clickable(enabled = can) { if (f.id in picked) picked.remove(f.id) else picked.add(f.id) }
+                                    .clickable { if (f.id in picked) picked.remove(f.id) else picked.add(f.id) }
                                     .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Checkbox(f.id in picked, null, enabled = can)
+                                Checkbox(f.id in picked, null)
                                 Column(Modifier.weight(1f).padding(start = 6.dp)) {
                                     Text(f.label.ifBlank { f.kind.label }, style = MaterialTheme.typography.bodyLarge)
-                                    Caption(if (can) f.kind.label else if (f.kind == FieldKind.COMBINED) "Gruppo" else "Già in un gruppo")
+                                    Caption(f.kind.label)
                                 }
                             }
                         }
                     }
                 } else {
-                    if (fields.size >= 2) Caption("Tieni premuto il nome di un campo per selezionarne più d'uno e concatenarli.")
-                    fields.forEachIndexed { i, f ->
-                        key(f.id) {
-                            if (i > 0) ListDivider()
-                            FieldEditor(
-                                f, fields, onChange = { fields[i] = it },
-                                onRemove = {
-                                    // un campo eliminato esce anche dai gruppi che lo usano
-                                    val gone = fields.removeAt(i).id
-                                    fields.replaceAll { o -> if (gone in o.parts) o.copy(parts = o.parts - gone) else o }
-                                },
-                                onUp = if (i > 0) ({ fields.add(i - 1, fields.removeAt(i)) }) else null,
-                                onDown = if (i < fields.lastIndex) ({ fields.add(i + 1, fields.removeAt(i)) }) else null,
-                                onSelect = { selecting = true; picked.clear(); if (f.kind != FieldKind.COMBINED && f.id !in inGroup) picked.add(f.id) },
-                                groupName = fields.firstOrNull { it.kind == FieldKind.COMBINED && f.id in it.parts }?.let { it.label.ifBlank { "Gruppo" } },
+                    if (free.size >= 2) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Caption("Unisci più campi in una riga sola, es. 3_Bagno_012", Modifier.weight(1f))
+                        AppButton("Concatena", { concat = true; picked.clear() })
+                    }
+                    blocks.forEachIndexed { bi, bl ->
+                        key(bl.id) {
+                            if (bi > 0) ListDivider()
+                            val up = if (bi > 0) ({ moveBlock(bi, -1) }) else null
+                            val down = if (bi < blocks.lastIndex) ({ moveBlock(bi, 1) }) else null
+                            if (bl.kind == FieldKind.COMBINED) GroupBlock(
+                                bl, fields,
+                                onChange = { replace(it); rebuild(blocks) },
+                                onUngroup = { fields.removeAll { it.id == bl.id } },
+                                onUp = up, onDown = down,
+                                onChangeMember = { replace(it) },
+                                onRemoveMember = { removeField(it) },
+                            ) else FieldEditor(
+                                bl, onChange = { replace(it) }, onRemove = { removeField(bl.id) },
+                                onUp = up, onDown = down,
                             )
                         }
                     }
@@ -183,35 +205,27 @@ fun LayoutScreen(
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun FieldEditor(
     f: NoteField,
-    all: List<NoteField>,
     onChange: (NoteField) -> Unit,
     onRemove: () -> Unit,
     onUp: (() -> Unit)? = null,
     onDown: (() -> Unit)? = null,
-    onSelect: () -> Unit = {},
-    /** Nome del gruppo di cui il campo fa parte, se c'è: il campo non si stampa da solo. */
-    groupName: String? = null,
+    /** Campo dentro un gruppo: si stampa dove sta il gruppo; [onLeaveGroup] lo riporta fuori. */
+    onLeaveGroup: (() -> Unit)? = null,
 ) {
+    val inGroup = onLeaveGroup != null
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        // intestazione: tenendola premuta si passa alla selezione di più campi
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(
-                Modifier.weight(1f).combinedClickable(onClick = {}, onLongClick = onSelect).padding(vertical = 6.dp)
-            ) {
-                Text(f.label.ifBlank { f.kind.label }, style = MaterialTheme.typography.titleSmall)
-                if (groupName != null) Caption("Unito nel gruppo «$groupName»")
-            }
+            Text(f.label.ifBlank { f.kind.label }, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             // ordine dei campi: è anche l'ordine nel pannello dell'editor e sulla fascia
             ToolIcon(AppIcons.Prev, "Sposta su", { onUp?.invoke() }, enabled = onUp != null, modifier = Modifier.rotate(90f))
             ToolIcon(AppIcons.Next, "Sposta giù", { onDown?.invoke() }, enabled = onDown != null, modifier = Modifier.rotate(90f))
-            ToolIcon(AppIcons.Delete, if (f.kind == FieldKind.COMBINED) "Sciogli il gruppo" else "Elimina campo", onRemove)
+            if (onLeaveGroup != null) ToolIcon(AppIcons.Close, "Togli dal gruppo", onLeaveGroup)
+            ToolIcon(AppIcons.Delete, "Elimina campo", onRemove)
         }
-        // tipo del campo, modificabile (il gruppo resta un gruppo)
-        if (f.kind != FieldKind.COMBINED) KindPicker(f.kind, Modifier.fillMaxWidth()) { k ->
+        KindPicker(f.kind, Modifier.fillMaxWidth()) { k ->
             onChange(f.copy(kind = k, label = f.label.ifBlank { k.defaultLabel }, showLabel = !k.auto))
         }
         Caption(f.kind.description)
@@ -220,17 +234,89 @@ private fun FieldEditor(
                 f.label, { onChange(f.copy(label = it)) },
                 if (f.auto) "Etichetta (facoltativa)" else "Nome del campo, es. Piano", Modifier.weight(1f),
             )
-            // un campo in un gruppo si stampa dove sta il gruppo
-            if (groupName == null) PositionPicker(f.pos) { onChange(f.copy(pos = it)) }
+            if (!inGroup) PositionPicker(f.pos) { onChange(f.copy(pos = it)) }
         }
         when (f.kind) {
             FieldKind.CHOICE -> ChoiceEditor(f, onChange)
             FieldKind.FIXED -> CompactField(f.text, { onChange(f.copy(text = it)) }, "Testo da stampare su ogni foto")
-            FieldKind.COMBINED -> CombinedEditor(f, all, onChange)
             else -> {}
         }
         // con l'etichetta: "Piano: 3"; senza: solo "3"
-        if (groupName == null) SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
+        if (!inGroup) SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
+    }
+}
+
+/**
+ * Un gruppo concatenato con i suoi campi appesi sotto, uniti da una linea ad albero.
+ * Sulla foto il gruppo stampa i valori dei campi in una riga, col separatore scelto.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GroupBlock(
+    g: NoteField,
+    all: List<NoteField>,
+    onChange: (NoteField) -> Unit,
+    onUngroup: () -> Unit,
+    onUp: (() -> Unit)?,
+    onDown: (() -> Unit)?,
+    onChangeMember: (NoteField) -> Unit,
+    onRemoveMember: (String) -> Unit,
+) {
+    val members = g.parts.mapNotNull { id -> all.firstOrNull { it.id == id } }
+    val outside = all.filter { it.kind != FieldKind.COMBINED && it.id !in grouped(all) }
+    val line = MaterialTheme.colorScheme.primary
+    fun name(x: NoteField) = x.label.trim().ifEmpty { x.kind.defaultLabel.ifEmpty { "Campo" } }
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Tag(g.label.ifBlank { "Gruppo" })
+            Spacer(Modifier.weight(1f))
+            ToolIcon(AppIcons.Prev, "Sposta su", { onUp?.invoke() }, enabled = onUp != null, modifier = Modifier.rotate(90f))
+            ToolIcon(AppIcons.Next, "Sposta giù", { onDown?.invoke() }, enabled = onDown != null, modifier = Modifier.rotate(90f))
+            ToolIcon(AppIcons.Delete, "Sciogli il gruppo (i campi restano)", onUngroup)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            CompactField(g.label, { onChange(g.copy(label = it)) }, "Nome del gruppo, es. Codice", Modifier.weight(1f))
+            PositionPicker(g.pos) { onChange(g.copy(pos = it)) }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
+            Caption("Separatore", Modifier.align(Alignment.CenterVertically))
+            for (sep in listOf("_", "-", ".", " ")) FilterChip(
+                selected = g.separator == sep, onClick = { onChange(g.copy(separator = sep)) },
+                label = { Text(if (sep == " ") "spazio" else sep) },
+            )
+        }
+        Caption("Sulla foto: " + members.joinToString(g.separator) { name(it) })
+        // i campi del gruppo, appesi alla linea ad albero
+        members.forEachIndexed { i, m ->
+            val last = i == members.lastIndex
+            Column(
+                Modifier.fillMaxWidth().drawBehind {
+                    val x = 8.dp.toPx(); val y = 26.dp.toPx(); val w = 1.5.dp.toPx()
+                    drawLine(line, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, if (last) y else size.height), w)
+                    drawLine(line, androidx.compose.ui.geometry.Offset(x, y), androidx.compose.ui.geometry.Offset(x + 10.dp.toPx(), y), w)
+                    drawCircle(line, 3.5.dp.toPx(), androidx.compose.ui.geometry.Offset(x + 13.dp.toPx(), y))
+                }.padding(start = 26.dp)
+            ) {
+                FieldEditor(
+                    m, onChange = onChangeMember, onRemove = { onRemoveMember(m.id) },
+                    onUp = if (i > 0) ({ onChange(g.copy(parts = g.parts.toMutableList().apply { add(i - 1, removeAt(i)) })) }) else null,
+                    onDown = if (!last) ({ onChange(g.copy(parts = g.parts.toMutableList().apply { add(i + 1, removeAt(i)) })) }) else null,
+                    onLeaveGroup = { onChange(g.copy(parts = g.parts - m.id)) },
+                )
+            }
+        }
+        if (outside.isNotEmpty()) {
+            var open by remember { mutableStateOf(false) }
+            Box(Modifier.padding(start = 26.dp)) {
+                BarAction("Aggiungi un campo al gruppo", { open = true })
+                DropdownMenu(open, { open = false }) {
+                    for (o in outside) DropdownMenuItem(
+                        text = { Text(name(o)) },
+                        onClick = { open = false; onChange(g.copy(parts = g.parts + o.id)) },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -458,32 +544,4 @@ fun MultiTextDialog(
         confirmButton = { TextButton({ onConfirm(target, text.trim()) }) { Text("Applica") } },
         dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
     )
-}
-
-
-/** Gruppo concatenato: ordine dei campi uniti e separatore. */
-@Composable
-private fun CombinedEditor(f: NoteField, all: List<NoteField>, onChange: (NoteField) -> Unit) {
-    val members = f.parts.mapNotNull { id -> all.firstOrNull { it.id == id } }
-    fun name(x: NoteField) = x.label.trim().ifEmpty { x.kind.defaultLabel.ifEmpty { "Campo" } }
-    members.forEachIndexed { i, m ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${i + 1}. ${name(m)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            ToolIcon(AppIcons.Prev, "Prima", {
-                onChange(f.copy(parts = f.parts.toMutableList().apply { add(i - 1, removeAt(i)) }))
-            }, enabled = i > 0, modifier = Modifier.rotate(90f))
-            ToolIcon(AppIcons.Next, "Dopo", {
-                onChange(f.copy(parts = f.parts.toMutableList().apply { add(i + 1, removeAt(i)) }))
-            }, enabled = i < members.lastIndex, modifier = Modifier.rotate(90f))
-            ToolIcon(AppIcons.Close, "Togli dal gruppo", { onChange(f.copy(parts = f.parts - m.id)) })
-        }
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Caption("Separatore")
-        for (sep in listOf("_", "-", ".", " ")) FilterChip(
-            selected = f.separator == sep, onClick = { onChange(f.copy(separator = sep)) },
-            label = { Text(if (sep == " ") "spazio" else sep) },
-        )
-    }
-    Caption("Esempio: " + members.joinToString(f.separator) { name(it) } + " · il cestino scioglie il gruppo, i campi restano.")
 }
