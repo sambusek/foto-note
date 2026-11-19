@@ -70,6 +70,8 @@ Il layout decide quali campi compaiono sulle foto e dove. Lo imposti per ogni so
 
 Ogni campo va in una fascia, sopra o sotto la foto, e in una posizione: sinistra, centro o destra. L'anteprima nel layout mostra dove cade. Per ogni campo puoi mostrare o nascondere l'etichetta prima del testo. Con le frecce su e giù accanto a ogni campo ne cambi l'ordine: è l'ordine in cui compaiono nell'editor e sulla fascia.
 
+**Campi concatenati.** Il tipo «Campi concatenati» unisce più campi in una riga sola, con un separatore: per esempio Piano, Zona e Progressivo diventano `3_Bagno_012`. Spegnendo «Stampa sulla foto» sui singoli campi, sulla fascia compare solo il codice unito, ma i campi restano separati per i nomi dello ZIP e per l'ordinamento.
+
 I template si gestiscono da Impostazioni › **Template di sopralluogo**. Si possono condividere e importare su un altro telefono; con **Copia i campi da…** riprendi i campi di un altro sopralluogo o template.
 
 ## Versioni, chiusura e consegna
@@ -84,6 +86,8 @@ Da un sopralluogo chiuso puoi creare e condividere:
 
 - **ZIP** delle foto, con i nomi dei file costruiti come vuoi da numero, nome originale, sopralluogo, utente, data, ora e campi (es. `01_P3_Bagno.jpg`);
 - **Report PDF** con le foto annotate, le loro note e la nota generale.
+
+Prima di creare ZIP o PDF scegli l'**ordine delle foto**: di scatto, per campi (es. prima per Piano, poi per Zona) oppure a mano con le frecce. Nei nomi dello ZIP la barra `/` crea delle cartelle: con `{Piano}/{Zona}/{N}` le foto finiscono in una cartella per piano e, dentro, una per zona.
 
 ### Passare un sopralluogo a un altro telefono
 

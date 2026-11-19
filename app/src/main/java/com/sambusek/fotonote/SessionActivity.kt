@@ -1,5 +1,11 @@
 package com.sambusek.fotonote
 
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.material3.Switch
 import androidx.compose.material3.DropdownMenuItem
@@ -591,6 +597,8 @@ private fun ReleasesScreen(s0: Session, onBack: () -> Unit) {
 private fun rememberExport(s: Session): (Release, Boolean) -> Unit {
     val ctx = LocalContext.current
     var zipFor by remember { mutableStateOf<Release?>(null) }
+    // prima si sceglie l'ordine delle foto, poi (per lo ZIP) i nomi dei file
+    var orderFor by remember { mutableStateOf<Pair<Release, Boolean>?>(null) }
 
     fun doExport(r: Release, pdf: Boolean, pattern: String) = SessionOps.export(ctx, s.id, r.folder, pdf, pattern) { f ->
         if (f == null) Toast.makeText(ctx, "Non sono riuscito a creare il file", Toast.LENGTH_LONG).show()
@@ -600,14 +608,26 @@ private fun rememberExport(s: Session): (Release, Boolean) -> Unit {
         )
     }
 
+    orderFor?.let { (r, pdf) ->
+        OrderDialog(
+            SessionStore.get(ctx, s.id) ?: s, r,
+            onConfirm = { order ->
+                orderFor = null
+                SessionStore.get(ctx, s.id)?.let { SessionStore.save(ctx, it.copy(photoOrder = order)) }
+                if (pdf) doExport(r, true, "") else zipFor = r
+            },
+            onDismiss = { orderFor = null },
+        )
+    }
     zipFor?.let { r ->
+        val now = SessionStore.get(ctx, s.id) ?: s
         ZipNameDialog(
-            s, r,
+            now, r.copy(items = now.photoOrder.apply(r.items)),
             onConfirm = { pattern -> zipFor = null; doExport(r, false, pattern) },
             onDismiss = { zipFor = null },
         )
     }
-    return { r, pdf -> if (pdf) doExport(r, true, "") else { zipFor = r } }
+    return { r, pdf -> orderFor = r to pdf }
 }
 
 /** Sceglie come chiamare i file nello ZIP, con segnaposto e anteprima. */
@@ -630,7 +650,10 @@ private fun ZipNameDialog(s: Session, r: Release, onConfirm: (String) -> Unit, o
         title = { Text("Nomi dei file nello ZIP") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Caption("Componi il nome con i segnaposto tra graffe: toccali per aggiungerli.")
+                Caption(
+                    "Componi il nome con i segnaposto tra graffe: toccali per aggiungerli. " +
+                        "Con / crei delle cartelle, es. {Piano}/{Zona}/{N}."
+                )
                 OutlinedTextField(
                     value = pattern, onValueChange = { pattern = it.replace("\n", "") }, singleLine = true,
                     shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -641,6 +664,7 @@ private fun ZipNameDialog(s: Session, r: Release, onConfirm: (String) -> Unit, o
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     for (t in FileNames.tokens(s)) AssistChip(onClick = { add(t) }, label = { Text(t) })
+                    AssistChip(onClick = { pattern = pattern.trimEnd('_', '-', ' ') + "/" }, label = { Text("/ cartella") })
                 }
                 Text("Esempio", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
                 for (n in preview) Caption(n)
@@ -693,5 +717,79 @@ private fun PresetDialog(
                 TextButton(onDismiss) { Text("Annulla") }
             }
         },
+    )
+}
+
+
+/** Ordine delle foto nel report e nello ZIP: di scatto, per campi o a mano. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun OrderDialog(s: Session, r: Release, onConfirm: (PhotoOrder) -> Unit, onDismiss: () -> Unit) {
+    var mode by remember { mutableStateOf(s.photoOrder.mode) }
+    val keys = remember { mutableStateListOf<String>().apply { addAll(s.photoOrder.fields.filter { id -> s.fields.any { it.id == id } }) } }
+    val manual = remember { mutableStateListOf<SessionItem>().apply { addAll(PhotoOrder("manual", manual = s.photoOrder.manual).apply(r.items)) } }
+    fun name(f: NoteField) = f.label.trim().ifEmpty { f.kind.defaultLabel.ifEmpty { "Campo" } }
+    fun describe(i: SessionItem) = s.fields.mapNotNull { f -> i.values[f.id]?.takeIf { it.isNotBlank() } }
+        .distinct().joinToString(" · ").ifEmpty { i.name }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        title = { Text("Ordine delle foto") },
+        text = {
+            Column {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for ((m, l) in listOf("taken" to "Di scatto", "fields" to "Per campi", "manual" to "A mano")) {
+                        FilterChip(selected = mode == m, onClick = { mode = m }, label = { Text(l) })
+                    }
+                }
+                when (mode) {
+                    "fields" -> {
+                        Caption("Tocca i campi in ordine di importanza: prima per il primo, a parità per il secondo…", Modifier.padding(top = 8.dp))
+                        FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (f in s.fields) {
+                                val n = keys.indexOf(f.id)
+                                FilterChip(
+                                    selected = n >= 0,
+                                    onClick = { if (n >= 0) keys.remove(f.id) else keys.add(f.id) },
+                                    label = { Text(if (n >= 0) "${n + 1}. ${name(f)}" else name(f)) },
+                                )
+                            }
+                        }
+                        if (s.fields.isEmpty()) Caption("Questo sopralluogo non ha campi.")
+                    }
+                    "manual" -> {
+                        Caption("Sposta le foto con le frecce.", Modifier.padding(top = 8.dp, bottom = 4.dp))
+                        LazyColumn(Modifier.heightIn(max = 380.dp)) {
+                            itemsIndexed(manual, key = { _, it -> it.source }) { i, item ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${i + 1}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(26.dp))
+                                    PhotoThumb(Uri.parse(item.out), Modifier.size(44.dp))
+                                    Text(
+                                        describe(item), style = MaterialTheme.typography.bodySmall, maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                    )
+                                    ToolIcon(AppIcons.Prev, "Sposta su", { manual.add(i - 1, manual.removeAt(i)) }, enabled = i > 0, modifier = Modifier.rotate(90f))
+                                    ToolIcon(AppIcons.Next, "Sposta giù", { manual.add(i + 1, manual.removeAt(i)) }, enabled = i < manual.lastIndex, modifier = Modifier.rotate(90f))
+                                }
+                            }
+                        }
+                    }
+                    else -> Caption("Le foto restano nell'ordine in cui le hai scattate.", Modifier.padding(top = 8.dp))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({
+                onConfirm(
+                    PhotoOrder(
+                        mode, keys.toList(),
+                        // l'ordine a mano si conserva anche se poi si sceglie un altro criterio
+                        if (mode == "manual") manual.map { it.source } else s.photoOrder.manual,
+                    )
+                )
+            }) { Text("Avanti") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
     )
 }

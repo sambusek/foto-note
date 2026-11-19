@@ -31,7 +31,11 @@ enum class FieldKind(
     TIME("Ora dello scatto", "Automatico: l'ora della foto", "Ora", FieldPos.TL),
     SESSION("Nome del sopralluogo", "Automatico: il nome di questa sessione", "Sopralluogo", FieldPos.TOP),
     USER("Nome utente", "Automatico: il tuo nome, impostato nell'app", "Redatto da", FieldPos.BR),
-    FIXED("Etichetta fissa", "Automatico: lo stesso testo su tutte le foto", "Etichetta", FieldPos.TR);
+    FIXED("Etichetta fissa", "Automatico: lo stesso testo su tutte le foto", "Etichetta", FieldPos.TR),
+    COMBINED(
+        "Campi concatenati", "Automatico: unisce altri campi in una sola riga, es. 3_Bagno_012",
+        "Codice", FieldPos.BOTTOM,
+    );
 
     /** Vero per i campi che si compilano da soli su tutte le foto. */
     val auto: Boolean get() = this != INPUT && this != CHOICE
@@ -51,6 +55,11 @@ data class NoteField(
     val text: String = "",
     /** Voci di un campo [FieldKind.CHOICE], scritte separate da virgole (es. "P3, P4"). */
     val choices: String = "",
+    /** Campi uniti da un [FieldKind.COMBINED], nell'ordine, e il separatore fra i valori. */
+    val parts: List<String> = emptyList(),
+    val separator: String = "_",
+    /** Falso: il campo resta un dato (editor, nomi dello ZIP, ordinamento) ma non si stampa sulla foto. */
+    val onBand: Boolean = true,
 ) {
     val auto: Boolean get() = kind.auto
     val options: List<String> get() = choices.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -72,6 +81,11 @@ object AutoFields {
             FieldKind.SESSION -> out[f.id] = sessionName
             FieldKind.USER -> out[f.id] = userName
             FieldKind.FIXED -> out[f.id] = f.text
+            FieldKind.COMBINED -> {}
+        }
+        // i campi concatenati per ultimi, quando gli altri valori sono pronti (i vuoti si saltano)
+        for (f in fields) if (f.kind == FieldKind.COMBINED) {
+            out[f.id] = f.parts.mapNotNull { out[it]?.trim()?.takeIf { v -> v.isNotEmpty() } }.joinToString(f.separator)
         }
         return out
     }
@@ -146,7 +160,7 @@ class Overlay private constructor(private val top: Strip?, private val bottom: S
 
     companion object {
         private fun lines(pos: FieldPos, fields: List<NoteField>, values: Map<String, String>): List<String> =
-            fields.filter { it.pos == pos }.mapNotNull { f ->
+            fields.filter { it.pos == pos && it.onBand }.mapNotNull { f ->
                 values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     if (f.showLabel && f.label.isNotBlank()) "${f.label.trim()}: $it" else it
                 }

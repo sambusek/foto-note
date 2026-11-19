@@ -45,6 +45,48 @@ class Release(val label: String, val folder: String, val time: Long, val items: 
  */
 data class Preset(val time: Long, val values: Map<String, String>)
 
+/**
+ * Ordine delle foto nei report PDF e negli ZIP: "taken" = di scatto, "fields" = per i valori dei campi
+ * [fields] (in priorità), "manual" = l'ordine [manual] (foto originali).
+ */
+data class PhotoOrder(val mode: String = "taken", val fields: List<String> = emptyList(), val manual: List<String> = emptyList())
+
+/** Confronto "naturale": P2 prima di P10, i vuoti in fondo. */
+object NaturalOrder : Comparator<String> {
+    private val chunk = Regex("\\d+|\\D+")
+    override fun compare(a: String, b: String): Int {
+        if (a.isBlank() && b.isBlank()) return 0
+        if (a.isBlank()) return 1
+        if (b.isBlank()) return -1
+        val x = chunk.findAll(a.lowercase()).map { it.value }.toList()
+        val y = chunk.findAll(b.lowercase()).map { it.value }.toList()
+        for (i in 0 until minOf(x.size, y.size)) {
+            val p = x[i]; val q = y[i]
+            val c = if (p[0].isDigit() && q[0].isDigit()) {
+                p.trimStart('0').length.compareTo(q.trimStart('0').length).takeIf { it != 0 } ?: p.trimStart('0').compareTo(q.trimStart('0'))
+            } else p.compareTo(q)
+            if (c != 0) return c
+        }
+        return x.size.compareTo(y.size)
+    }
+}
+
+/** Le foto di [r] nell'ordine scelto. */
+fun PhotoOrder.apply(items: List<SessionItem>): List<SessionItem> = when (mode) {
+    "fields" -> if (fields.isEmpty()) items else items.withIndex().sortedWith { a, b ->
+        for (f in fields) {
+            val c = NaturalOrder.compare(a.value.values[f].orEmpty(), b.value.values[f].orEmpty())
+            if (c != 0) return@sortedWith c
+        }
+        a.index.compareTo(b.index)
+    }.map { it.value }
+    "manual" -> {
+        val pos = manual.withIndex().associate { it.value to it.index }
+        items.withIndex().sortedWith(compareBy({ pos[it.value.source] ?: Int.MAX_VALUE }, { it.index })).map { it.value }
+    }
+    else -> items
+}
+
 /** Una pausa della sessione; [end] = 0 se è ancora in corso. */
 data class Pause(val start: Long, val end: Long = 0L)
 
@@ -77,6 +119,8 @@ data class Session(
     val pauses: List<Pause> = emptyList(),
     /** Storia delle precompilazioni: ogni foto prende quella valida al momento dello scatto. */
     val presets: List<Preset> = emptyList(),
+    /** Ordine delle foto scelto per report e ZIP. */
+    val photoOrder: PhotoOrder = PhotoOrder(),
 ) {
     /** Valori precompilati per una foto scattata a [ms]. */
     fun presetAt(ms: Long): Map<String, String> = presets.lastOrNull { it.time <= ms }?.values.orEmpty()
@@ -119,6 +163,7 @@ private fun List<SessionItem>.toJson() = JSONArray().also { a -> forEach { a.put
 internal fun NoteField.toJson() = JSONObject()
     .put("id", id).put("label", label).put("pos", pos.name).put("showLabel", showLabel)
     .put("kind", kind.name).put("text", text).put("choices", choices)
+    .put("parts", JSONArray(parts)).put("separator", separator).put("onBand", onBand)
 
 internal fun fieldFromJson(x: JSONObject): NoteField {
     val choices = x.optString("choices", "")
@@ -128,6 +173,9 @@ internal fun fieldFromJson(x: JSONObject): NoteField {
         x.getString("id"), x.getString("label"),
         FieldPos.entries.firstOrNull { it.name == x.optString("pos") } ?: FieldPos.BOTTOM,
         x.optBoolean("showLabel", true), kind, x.optString("text", ""), choices,
+        parts = x.optJSONArray("parts")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
+        separator = x.optString("separator", "_"),
+        onBand = x.optBoolean("onBand", true),
     )
 }
 
@@ -153,6 +201,8 @@ internal fun Session.toJson(): JSONObject {
         .put("zipPattern", zipPattern)
         .put("generalNote", generalNote)
         .put("pauses", JSONArray().also { a -> pauses.forEach { a.put(JSONArray().put(it.start).put(it.end)) } })
+        .put("photoOrder", JSONObject().put("mode", photoOrder.mode)
+            .put("fields", JSONArray(photoOrder.fields)).put("manual", JSONArray(photoOrder.manual)))
         .put("presets", JSONArray().also { a ->
             presets.forEach { a.put(JSONObject().put("time", it.time).put("values", JSONObject(it.values as Map<*, *>))) }
         })
@@ -184,6 +234,13 @@ internal fun sessionFromJson(o: JSONObject): Session {
         pauses = o.optJSONArray("pauses")?.let { a ->
             (0 until a.length()).map { val p = a.getJSONArray(it); Pause(p.getLong(0), p.optLong(1, 0L)) }
         }.orEmpty(),
+        photoOrder = o.optJSONObject("photoOrder")?.let { p ->
+            PhotoOrder(
+                p.optString("mode", "taken"),
+                p.optJSONArray("fields").strings(),
+                p.optJSONArray("manual").strings(),
+            )
+        } ?: PhotoOrder(),
         presets = o.optJSONArray("presets")?.let { a ->
             (0 until a.length()).map {
                 val p = a.getJSONObject(it)
@@ -329,7 +386,7 @@ object FileNames {
         return release.items.mapIndexed { i, item ->
             val ext = item.name.substringAfterLast('.', "jpg")
             val taken = Date(if (item.taken > 0) item.taken else release.time)
-            val name = Regex("\\{([^}]*)\\}").replace(pattern.ifBlank { DEFAULT }) { m ->
+            fun fill(part: String) = Regex("\\{([^}]*)\\}").replace(part) { m ->
                 val key = m.groupValues[1].trim()
                 when (key.lowercase()) {
                     "n" -> (i + 1).toString().padStart(digits, '0')
@@ -341,8 +398,13 @@ object FileNames {
                     else -> byLabel[key.lowercase()]?.let { item.values[it.id] }.orEmpty()
                 }
             }
-            val base = clean(name).replace(Regex("_+"), "_").trim('_', '-', ' ')
-            "${base.ifEmpty { "foto_" + (i + 1).toString().padStart(digits, '0') }}.$ext"
+            // "/" nello schema crea sottocartelle, es. {Piano}/{Zona}/{N}
+            val segments = pattern.ifBlank { DEFAULT }.split('/').map { seg ->
+                clean(fill(seg)).replace(Regex("_+"), "_").trim('_', '-', ' ', '.')
+            }
+            val dirs = segments.dropLast(1).map { it.ifEmpty { "senza_valore" } }
+            val base = segments.last().ifEmpty { "foto_" + (i + 1).toString().padStart(digits, '0') }
+            (dirs + "$base.$ext").joinToString("/")
         }
     }
 }
@@ -451,7 +513,9 @@ object SessionOps {
         val c = context.applicationContext
         launchOp(if (pdf) "Creazione del report PDF…" else "Creazione dello ZIP…", {
             val s = SessionStore.get(c, id)!!
-            val r = s.releases.first { it.folder == folder }
+            val r0 = s.releases.first { it.folder == folder }
+            // foto nell'ordine scelto: vale per il report e per la numerazione {N} dello ZIP
+            val r = r0.copy(items = s.photoOrder.apply(r0.items))
             val dir = File(c.cacheDir, "share").apply { mkdirs() }
             dir.listFiles()?.forEach { it.delete() }
             val f = File(dir, r.folder + if (pdf) ".pdf" else ".zip")

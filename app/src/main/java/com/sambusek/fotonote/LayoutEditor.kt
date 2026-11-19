@@ -1,5 +1,7 @@
 package com.sambusek.fotonote
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.draw.rotate
 import android.content.Context
 import android.net.Uri
@@ -111,7 +113,12 @@ fun LayoutScreen(
                     key(f.id) {
                         if (i > 0) ListDivider()
                         FieldEditor(
-                            f, onChange = { fields[i] = it }, onRemove = { fields.removeAt(i) },
+                            f, fields, onChange = { fields[i] = it },
+                            onRemove = {
+                                // un campo eliminato esce anche dai campi concatenati che lo usano
+                                val gone = fields.removeAt(i).id
+                                fields.replaceAll { o -> if (gone in o.parts) o.copy(parts = o.parts - gone) else o }
+                            },
                             onUp = if (i > 0) ({ fields.add(i - 1, fields.removeAt(i)) }) else null,
                             onDown = if (i < fields.lastIndex) ({ fields.add(i + 1, fields.removeAt(i)) }) else null,
                         )
@@ -132,6 +139,7 @@ fun LayoutScreen(
 @Composable
 private fun FieldEditor(
     f: NoteField,
+    all: List<NoteField>,
     onChange: (NoteField) -> Unit,
     onRemove: () -> Unit,
     onUp: (() -> Unit)? = null,
@@ -159,10 +167,13 @@ private fun FieldEditor(
         when (f.kind) {
             FieldKind.CHOICE -> ChoiceEditor(f, onChange)
             FieldKind.FIXED -> CompactField(f.text, { onChange(f.copy(text = it)) }, "Testo da stampare su ogni foto")
+            FieldKind.COMBINED -> CombinedEditor(f, all, onChange)
             else -> {}
         }
+        // stampato sulla foto o solo dato (es. le parti di un campo concatenato)
+        SwitchRow("Stampa sulla foto", f.onBand, { onChange(f.copy(onBand = !f.onBand)) })
         // con l'etichetta: "Piano: 3"; senza: solo "3"
-        SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
+        if (f.onBand) SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
     }
 }
 
@@ -304,7 +315,7 @@ private fun PositionPicker(pos: FieldPos, onPick: (FieldPos) -> Unit) {
  */
 @Composable
 private fun LayoutPreview(fields: List<NoteField>) {
-    fun names(pos: FieldPos) = fields.filter { it.pos == pos && (it.auto || it.label.isNotBlank()) }.map {
+    fun names(pos: FieldPos) = fields.filter { it.pos == pos && it.onBand && (it.auto || it.label.isNotBlank()) }.map {
         if (it.auto) it.label.trim().ifEmpty { it.kind.defaultLabel } + "*" else it.label.trim()
     }
     val grey = Color(0xFF777777)
@@ -390,4 +401,38 @@ fun MultiTextDialog(
         confirmButton = { TextButton({ onConfirm(target, text.trim()) }) { Text("Applica") } },
         dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
     )
+}
+
+
+/** Campi da unire in un campo concatenato, nell'ordine in cui si toccano, e il separatore. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CombinedEditor(f: NoteField, all: List<NoteField>, onChange: (NoteField) -> Unit) {
+    val candidates = all.filter { it.id != f.id && it.kind != FieldKind.COMBINED }
+    fun name(x: NoteField) = x.label.trim().ifEmpty { x.kind.defaultLabel.ifEmpty { "Campo" } }
+    if (candidates.isEmpty()) {
+        Caption("Aggiungi prima i campi da unire (es. Piano, Zona, Progressivo).")
+        return
+    }
+    Caption("Tocca i campi da unire, nell'ordine:")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (c in candidates) {
+            val n = f.parts.indexOf(c.id)
+            FilterChip(
+                selected = n >= 0,
+                onClick = { onChange(f.copy(parts = if (n >= 0) f.parts - c.id else f.parts + c.id)) },
+                label = { Text(if (n >= 0) "${n + 1}. ${name(c)}" else name(c)) },
+            )
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Caption("Separatore")
+        for (sep in listOf("_", "-", ".", " ")) FilterChip(
+            selected = f.separator == sep, onClick = { onChange(f.copy(separator = sep)) },
+            label = { Text(if (sep == " ") "spazio" else sep) },
+        )
+    }
+    val example = f.parts.mapNotNull { id -> candidates.firstOrNull { it.id == id } }
+        .joinToString(f.separator) { name(it) }
+    if (example.isNotEmpty()) Caption("Esempio: $example")
 }
