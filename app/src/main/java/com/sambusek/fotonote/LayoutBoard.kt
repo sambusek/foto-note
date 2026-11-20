@@ -1,20 +1,23 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,26 +30,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
-import kotlin.math.roundToInt
 
 /**
  * Operazioni sul layout. Un elemento del layout è un campo posizionato oppure una catena
@@ -119,148 +110,88 @@ object LayoutOps {
         return normalize(update(detach(fs, id), id) { it.copy(placed = false) })
     }
 
-    /** Concatena [dragId] (campo o catena) con [targetId]: dopo di lui nella sua catena, o in una catena nuova. */
-    fun join(fs: List<NoteField>, dragId: String, targetId: String): List<NoteField> {
-        if (dragId == targetId) return fs
-        val drag = fs.firstOrNull { it.id == dragId } ?: return fs
-        val target = fs.firstOrNull { it.id == targetId } ?: return fs
-        val targetChain = if (target.kind == FieldKind.COMBINED) target else chainOf(fs, targetId)
-        if (targetChain != null && (targetChain.id == dragId || dragId in targetChain.parts && target.kind == FieldKind.COMBINED)) return fs
-        val moving = if (drag.kind == FieldKind.COMBINED) drag.parts else listOf(dragId)
-        var l = if (drag.kind == FieldKind.COMBINED) fs.filter { it.id != dragId } else detach(fs, dragId)
-        if (targetChain != null) {
-            l = update(l, targetChain.id) { c ->
-                val base = c.parts - moving.toSet()
-                val at = if (target.kind == FieldKind.COMBINED) base.size else base.indexOf(targetId) + 1
-                c.copy(parts = base.toMutableList().apply { addAll(at.coerceIn(0, base.size), moving) })
-            }
-        } else {
-            val n = l.count { it.kind == FieldKind.COMBINED } + 1
+    /** Crea o aggiorna una catena; i campi tolti tornano da soli in fondo alla banda della catena. */
+    fun saveChain(
+        fs: List<NoteField>, chainId: String?, name: String, parts: List<String>, separator: String, band: FieldPos,
+    ): List<NoteField> {
+        val old = chainId?.let { id -> fs.firstOrNull { it.id == id } }
+        var l = fs
+        // un campo può stare in una sola catena
+        l = l.map { c -> if (c.kind == FieldKind.COMBINED && c.id != chainId && c.parts.any { it in parts }) c.copy(parts = c.parts - parts.toSet()) else c }
+        if (old == null) {
             val chain = NoteField(
-                System.nanoTime().toString(), "Codice" + if (n > 1) " $n" else "", target.pos,
-                showLabel = false, kind = FieldKind.COMBINED, parts = listOf(targetId) + moving,
-                placed = true, slot = target.slot,
+                System.nanoTime().toString(), name.trim().ifEmpty { "Codice" }, band, showLabel = false,
+                kind = FieldKind.COMBINED, parts = parts, separator = separator, placed = true, slot = nextSlot(l, band),
             )
-            // la catena prende il posto del campo su cui si è lasciato l'altro
-            val i = l.indexOfFirst { it.id == targetId }
-            l = l.toMutableList().apply { add(i.coerceAtLeast(0), chain) }
+            l = l + chain
+        } else {
+            val moved = old.pos != band
+            l = update(l, old.id) {
+                it.copy(label = name.trim().ifEmpty { "Codice" }, parts = parts, separator = separator, pos = band,
+                    placed = true, slot = if (moved) nextSlot(l, band) else it.slot)
+            }
+            var next = nextSlot(l, band)
+            for (gone in old.parts - parts.toSet()) l = update(l, gone) { it.copy(placed = true, pos = band, slot = next++) }
         }
-        return normalize(l.map { if (it.id in moving) it.copy(placed = true) else it })
+        return normalize(l)
     }
 }
 
 private val SEPARATORS = listOf("_", "-", ".", " ")
 
 /**
- * Lavagna del layout: le caselle sopra e sotto la foto e il vassoio dei campi non stampati.
- * Le etichette (pills) si trascinano tenendole premute, oppure si toccano e poi si tocca la destinazione:
- * su una casella si spostano, su un'altra etichetta si concatenano, sul vassoio escono dal layout.
+ * Lavagna del layout: le due bande sopra e sotto la foto e il vassoio dei campi non stampati.
+ * Un tocco su un'etichetta apre le sue azioni (dove stamparla, prima o dopo); le catene si
+ * creano e si modificano in una finestra dedicata.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LayoutBoard(fields: SnapshotStateList<NoteField>) {
     val cs = MaterialTheme.colorScheme
-    var selected by remember { mutableStateOf<String?>(null) }
-    var drag by remember { mutableStateOf<Pair<String, Offset>?>(null) } // id e punto (coordinate radice)
-    var origin by remember { mutableStateOf(Offset.Zero) }
-    var editChain by remember { mutableStateOf<String?>(null) }
-    val bounds = remember { HashMap<String, Rect>() }
+    var chainEdit by remember { mutableStateOf<String?>(null) } // id della catena, oppure "" per una nuova
 
     fun apply(l: List<NoteField>) { fields.clear(); fields.addAll(l) }
     fun name(f: NoteField) = f.label.trim().ifEmpty { f.kind.defaultLabel.ifEmpty { f.kind.label } }
     fun byId(id: String) = fields.firstOrNull { it.id == id }
     val inChains = grouped(fields)
-
-    /** Azione su una destinazione: "pill:<id>", "cell:<POS>" oppure "tray". */
-    fun act(id: String, target: String) {
-        when {
-            target.startsWith("pill:") -> {
-                val t = target.removePrefix("pill:")
-                // un'etichetta del vassoio non si concatena: lasciarci sopra vuol dire "non stampare"
-                val inTray = byId(t)?.let { !it.placed && it.id !in grouped(fields) } == true
-                apply(if (inTray) LayoutOps.unplace(fields, id) else LayoutOps.join(fields, id, t))
-            }
-            target.startsWith("cell:") -> apply(LayoutOps.moveTo(fields, id, FieldPos.valueOf(target.removePrefix("cell:"))))
-            target == "tray" -> apply(LayoutOps.unplace(fields, id))
-        }
-        selected = null
-    }
-
-    fun drop(id: String, p: Offset) {
-        val own = byId(id)?.takeIf { it.kind == FieldKind.COMBINED }?.parts.orEmpty() + id
-        // prima le etichette (concatena), poi le caselle e il vassoio
-        val hit = bounds.entries.filter { it.key.startsWith("pill:") && it.key.removePrefix("pill:") !in own && it.value.contains(p) }
-            .minByOrNull { it.value.width }?.key
-            ?: bounds.entries.firstOrNull { !it.key.startsWith("pill:") && it.value.contains(p) }?.key
-        if (hit != null) act(id, hit)
-    }
+    fun chainText(c: NoteField) = c.parts.mapNotNull { byId(it) }.joinToString(c.separator) { name(it) }
+    val free = fields.filter { it.kind != FieldKind.COMBINED && it.id !in inChains && (it.auto || it.label.isNotBlank()) }
 
     @Composable
-    fun Pill(id: String, text: String, auto: Boolean, chainHandle: Boolean = false) {
-        val isSel = selected == id
-        val dragging = drag?.first == id
-        val tap by rememberUpdatedState {
-            val s = selected
-            when {
-                s == null -> selected = id
-                s == id -> selected = null
-                else -> act(s, "pill:$id")
-            }
-        }
-        val onDrop by rememberUpdatedState { i: String, p: Offset -> drop(i, p) }
-        Text(
-            if (chainHandle) "⛓ $text" else text,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (chainHandle) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (isSel) cs.onPrimary else if (auto) cs.onSecondaryContainer else cs.onPrimaryContainer,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .alpha(if (dragging) 0.35f else 1f)
-                .onGloballyPositioned { bounds["pill:$id"] = it.boundsInRoot() }
-                .widthIn(max = 150.dp)
-                .clip(RoundedCornerShape(50))
-                .background(if (isSel) cs.primary else if (auto) cs.secondaryContainer else cs.primaryContainer)
-                .pointerInput(id) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { o ->
-                            selected = null
-                            drag = id to ((bounds["pill:$id"]?.topLeft ?: Offset.Zero) + o)
-                        },
-                        onDrag = { ch, d -> ch.consume(); drag = drag?.let { it.first to it.second + d } },
-                        onDragEnd = { drag?.let { onDrop(it.first, it.second) }; drag = null },
-                        onDragCancel = { drag = null },
+    fun Pill(f: NoteField) {
+        var menu by remember { mutableStateOf(false) }
+        val chain = f.kind == FieldKind.COMBINED
+        Box {
+            Text(
+                if (chain) "⛓ ${name(f)}: ${chainText(f)}" else name(f),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (chain) cs.onPrimary else if (f.auto) cs.onSecondaryContainer else cs.onPrimaryContainer,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .widthIn(max = 260.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (chain) cs.primary else if (f.auto) cs.secondaryContainer else cs.primaryContainer)
+                    .clickable { menu = true }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+            DropdownMenu(menu, { menu = false }) {
+                fun go(l: List<NoteField>) { menu = false; apply(l) }
+                if (chain) DropdownMenuItem(text = { Text("Modifica la catena…") }, onClick = { menu = false; chainEdit = f.id })
+                if (!f.placed || f.pos.band != FieldPos.TOP) DropdownMenuItem(
+                    text = { Text("Stampa nella banda superiore") }, onClick = { go(LayoutOps.moveTo(fields, f.id, FieldPos.TOP)) },
+                )
+                if (!f.placed || f.pos.band != FieldPos.BOTTOM) DropdownMenuItem(
+                    text = { Text("Stampa nella banda inferiore") }, onClick = { go(LayoutOps.moveTo(fields, f.id, FieldPos.BOTTOM)) },
+                )
+                if (f.placed) {
+                    DropdownMenuItem(text = { Text("◀  Prima") }, onClick = { go(LayoutOps.shift(fields, f.id, -1)) })
+                    DropdownMenuItem(text = { Text("Dopo  ▶") }, onClick = { go(LayoutOps.shift(fields, f.id, 1)) })
+                    DropdownMenuItem(
+                        text = { Text(if (chain) "Sciogli la catena" else "Non stampare") },
+                        onClick = { go(if (chain) LayoutOps.dissolve(fields, f.id) else LayoutOps.unplace(fields, f.id)) },
                     )
                 }
-                .clickable { tap() }
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-        )
-    }
-
-    @Composable
-    fun Item(f: NoteField) {
-        if (f.kind != FieldKind.COMBINED) return Pill(f.id, name(f), f.auto)
-        // catena: maniglia col nome, i campi con il separatore fra l'uno e l'altro, le impostazioni
-        val members = f.parts.mapNotNull { byId(it) }
-        FlowRow(
-            Modifier.clip(RoundedCornerShape(18.dp)).border(1.5.dp, cs.primary, RoundedCornerShape(18.dp)).padding(3.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Pill(f.id, name(f), auto = false, chainHandle = true)
-            members.forEachIndexed { i, m ->
-                Text(
-                    // tocco sul separatore: si passa al successivo
-                    if (i == 0) ":" else if (f.separator == " ") "␣" else f.separator,
-                    style = MaterialTheme.typography.titleMedium, color = Color.White,
-                    modifier = Modifier.align(Alignment.CenterVertically)
-                        .clickable(enabled = i > 0) {
-                            val next = SEPARATORS[(SEPARATORS.indexOf(f.separator) + 1) % SEPARATORS.size]
-                            apply(fields.map { if (it.id == f.id) it.copy(separator = next) else it })
-                        }
-                        .padding(horizontal = 5.dp),
-                )
-                Pill(m.id, name(m), m.auto)
             }
-            ToolIcon(AppIcons.Tune, "Impostazioni della catena", { editChain = f.id }, modifier = Modifier.align(Alignment.CenterVertically))
         }
     }
 
@@ -268,126 +199,140 @@ fun LayoutBoard(fields: SnapshotStateList<NoteField>) {
     fun Band(pos: FieldPos, title: String, extra: String? = null) {
         val items = fields.filter { it.placed && it.pos.band == pos && it.id !in inChains && (it.auto || it.label.isNotBlank() || it.kind == FieldKind.COMBINED) }
             .sortedWith(compareBy({ it.pos.ordinal }, { it.slot }))
-        val tap by rememberUpdatedState { selected?.let { act(it, "cell:${pos.name}") } }
-        val active = selected != null || drag != null
         Column(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .onGloballyPositioned { bounds["cell:${pos.name}"] = it.boundsInRoot() }
+                .heightIn(min = 60.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF2B2B2B))
-                .border(if (active) 2.dp else 1.dp, if (active) cs.primary else Color(0xFF555555), RoundedCornerShape(8.dp))
-                .clickable(enabled = selected != null) { tap() }
-                .padding(6.dp),
+                .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(title, style = MaterialTheme.typography.labelSmall, color = Color(0xFFAAAAAA))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (f in items) Item(f)
+                for (f in items) Pill(f)
                 if (items.isEmpty()) Text("vuota", style = MaterialTheme.typography.labelMedium, color = Color(0xFF888888))
             }
             extra?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Color(0xFFCCCCCC)) }
         }
     }
 
-    Box(Modifier.fillMaxWidth().onGloballyPositioned { origin = it.positionInRoot() }) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val sel = selected?.let { byId(it) }
-            if (sel != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                Caption(
-                    "«${name(sel)}»: tocca una banda per spostarlo, un'altra etichetta per concatenarli, " +
-                        "il vassoio per non stamparlo.",
-                    Modifier.weight(1f),
-                )
-                // ordine nella banda (o nella catena)
-                ToolIcon(AppIcons.Prev, "Prima", { apply(LayoutOps.shift(fields, sel.id, -1)) })
-                ToolIcon(AppIcons.Next, "Dopo", { apply(LayoutOps.shift(fields, sel.id, 1)) })
-                ToolIcon(AppIcons.Close, "Annulla", { selected = null })
-            } else Caption(
-                "Tieni premuta un'etichetta e trascinala, oppure toccala e poi tocca dove va. " +
-                    "Lasciata su un'altra etichetta, la concatena."
-            )
-            Band(FieldPos.TOP, "Banda superiore")
-            Box(
-                Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF8A8A8A)),
-                contentAlignment = Alignment.Center,
-            ) { Text("FOTO", color = Color(0xFFE6E6E6), style = MaterialTheme.typography.labelLarge) }
-            Band(FieldPos.BOTTOM, "Banda inferiore", extra = "+ nota della foto, a capo")
-            Caption("Sulla foto le etichette di una banda si stampano in fila, separate da un punto.")
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Caption("Tocca un'etichetta per scegliere dove stamparla e in che ordine.")
+        Band(FieldPos.TOP, "Banda superiore")
+        Box(
+            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF8A8A8A)),
+            contentAlignment = Alignment.Center,
+        ) { Text("FOTO", color = Color(0xFFE6E6E6), style = MaterialTheme.typography.labelLarge) }
+        Band(FieldPos.BOTTOM, "Banda inferiore", extra = "+ nota della foto, a capo")
+        Caption("Sulla foto le etichette di una banda si stampano in fila, separate da un punto.")
+        if (free.size >= 2) AppButton(
+            "Nuova catena…", { chainEdit = "" }, Modifier.fillMaxWidth().padding(top = 4.dp),
+        )
 
-            // vassoio: campi che si compilano ma non si stampano
-            val tray = fields.filter { !it.placed && it.id !in inChains && it.kind != FieldKind.COMBINED && (it.auto || it.label.isNotBlank()) }
-            val trayTap by rememberUpdatedState { selected?.let { act(it, "tray") } }
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp)
-                    .onGloballyPositioned { bounds["tray"] = it.boundsInRoot() }
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, if (selected != null || drag != null) cs.primary else cs.outlineVariant, RoundedCornerShape(10.dp))
-                    .clickable(enabled = selected != null) { trayTap() }
-                    .padding(8.dp),
-            ) {
-                Text("Non stampati", style = MaterialTheme.typography.titleSmall)
-                Caption("Si compilano e valgono per i nomi dello ZIP e per l'ordine, ma non vanno sulla foto.")
-                FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (tray.isEmpty()) Caption("Vuoto")
-                    for (f in tray) Pill(f.id, name(f), f.auto)
-                }
+        // vassoio: campi che si compilano ma non si stampano
+        val tray = fields.filter { !it.placed && it.id !in inChains && it.kind != FieldKind.COMBINED && (it.auto || it.label.isNotBlank()) }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(1.dp, cs.outlineVariant, RoundedCornerShape(10.dp))
+                .padding(8.dp),
+        ) {
+            Text("Non stampati", style = MaterialTheme.typography.titleSmall)
+            Caption("Si compilano e valgono per i nomi dello ZIP e per l'ordine, ma non vanno sulla foto.")
+            FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (tray.isEmpty()) Caption("Vuoto")
+                for (f in tray) Pill(f)
             }
         }
-
-        // etichetta che segue il dito durante il trascinamento
-        drag?.let { (id, p) ->
-            val f = byId(id)
-            Text(
-                f?.let { (if (it.kind == FieldKind.COMBINED) "⛓ " else "") + name(it) }.orEmpty(),
-                style = MaterialTheme.typography.labelLarge, color = cs.onPrimary,
-                modifier = Modifier
-                    .zIndex(10f)
-                    .offset { IntOffset((p.x - origin.x - 30.dp.toPx()).roundToInt(), (p.y - origin.y - 40.dp.toPx()).roundToInt()) }
-                    .clip(RoundedCornerShape(50))
-                    .background(cs.primary)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
     }
 
-    editChain?.let { id ->
-        val c = byId(id)
-        if (c == null) { editChain = null; return@let }
-        var label by remember(id) { mutableStateOf(c.label) }
-        AlertDialog(
-            onDismissRequest = { editChain = null },
-            shape = RoundedCornerShape(12.dp),
-            title = { Text("Catena") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Caption("Il nome serve nei nomi dello ZIP, es. {${label.ifBlank { "Codice" }}}.")
-                    CompactField(label, { label = it }, "Nome, es. Codice")
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (sep in SEPARATORS) FilterChip(
-                            selected = c.separator == sep,
-                            onClick = { apply(fields.map { if (it.id == id) it.copy(separator = sep) else it }) },
-                            label = { Text(if (sep == " ") "spazio" else sep) },
-                        )
-                    }
-                    Caption("Sulla foto: " + c.parts.mapNotNull { byId(it) }.joinToString(c.separator) { name(it) })
-                }
-            },
-            confirmButton = {
-                TextButton({
-                    apply(fields.map { if (it.id == id) it.copy(label = label.trim().ifEmpty { "Codice" }) else it })
-                    editChain = null
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                // sciogliere: i campi restano nella stessa casella, uno per riga
-                TextButton({
-                    apply(LayoutOps.dissolve(fields, id)); editChain = null
-                }) { Text("Sciogli") }
-            },
+    chainEdit?.let { id ->
+        val chain = id.takeIf { it.isNotEmpty() }?.let { byId(it) }
+        // campi disponibili: quelli liberi e quelli di questa catena
+        val candidates = fields.filter { f ->
+            f.kind != FieldKind.COMBINED && (f.auto || f.label.isNotBlank()) && (f.id !in inChains || chain != null && f.id in chain.parts)
+        }
+        ChainDialog(
+            chain, candidates, ::name,
+            onSave = { label, parts, sep, band -> apply(LayoutOps.saveChain(fields, chain?.id, label, parts, sep, band)); chainEdit = null },
+            onDissolve = chain?.let { c -> { apply(LayoutOps.dissolve(fields, c.id)); chainEdit = null } },
+            onDismiss = { chainEdit = null },
         )
     }
+}
+
+/** Crea o modifica una catena: campi nell'ordine in cui si toccano, frecce per riordinare, separatore, banda. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChainDialog(
+    chain: NoteField?,
+    candidates: List<NoteField>,
+    name: (NoteField) -> String,
+    onSave: (label: String, parts: List<String>, separator: String, band: FieldPos) -> Unit,
+    onDissolve: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var label by remember { mutableStateOf(chain?.label ?: "Codice") }
+    var sep by remember { mutableStateOf(chain?.separator ?: "_") }
+    var band by remember { mutableStateOf(chain?.pos?.band ?: FieldPos.BOTTOM) }
+    val order = remember { mutableStateListOf<String>().apply { addAll(chain?.parts.orEmpty()) } }
+    fun f(id: String) = candidates.firstOrNull { it.id == id }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        title = { Text(if (chain == null) "Nuova catena" else "Catena") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Caption("Tocca i campi nell'ordine in cui vanno uniti.")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (c in candidates) {
+                        val n = order.indexOf(c.id)
+                        FilterChip(
+                            selected = n >= 0,
+                            onClick = { if (n >= 0) order.remove(c.id) else order.add(c.id) },
+                            label = { Text(if (n >= 0) "${n + 1}  ${name(c)}" else name(c)) },
+                        )
+                    }
+                }
+                if (order.isNotEmpty()) {
+                    Text("Ordine", style = MaterialTheme.typography.titleSmall)
+                    order.forEachIndexed { i, id ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${i + 1}.  ${f(id)?.let(name).orEmpty()}", Modifier.weight(1f))
+                            ToolIcon(AppIcons.Prev, "Su", { order.add(i - 1, order.removeAt(i)) }, enabled = i > 0, modifier = Modifier.rotate(90f))
+                            ToolIcon(AppIcons.Next, "Giù", { order.add(i + 1, order.removeAt(i)) }, enabled = i < order.lastIndex, modifier = Modifier.rotate(90f))
+                        }
+                    }
+                }
+                Text("Separatore", style = MaterialTheme.typography.titleSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (s in SEPARATORS) FilterChip(selected = sep == s, onClick = { sep = s }, label = { Text(if (s == " ") "spazio" else s) })
+                }
+                Text("Banda", style = MaterialTheme.typography.titleSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = band == FieldPos.TOP, onClick = { band = FieldPos.TOP }, label = { Text("Superiore") })
+                    FilterChip(selected = band == FieldPos.BOTTOM, onClick = { band = FieldPos.BOTTOM }, label = { Text("Inferiore") })
+                }
+                CompactField(label, { label = it }, "Nome della catena (per lo ZIP), es. Codice")
+                if (order.size >= 2) Text(
+                    "Sulla foto: " + order.mapNotNull { f(it) }.joinToString(sep) { name(it) },
+                    style = MaterialTheme.typography.bodyMedium, color = cs.primary,
+                ) else Caption("Scegli almeno due campi.")
+            }
+        },
+        confirmButton = {
+            TextButton({ onSave(label, order.toList(), sep, band) }, enabled = order.size >= 2) { Text("Salva") }
+        },
+        dismissButton = {
+            Row {
+                if (onDissolve != null) TextButton(onDissolve) { Text("Sciogli") }
+                TextButton(onDismiss) { Text("Annulla") }
+            }
+        },
+    )
 }

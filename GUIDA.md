@@ -70,11 +70,12 @@ Il layout decide quali campi si compilano e dove si stampano sulle foto. Lo impo
 | Sopralluogo, Utente | Riempiti da soli con il nome del sopralluogo e il tuo | 261118 SAL |
 | Fisso | Stesso testo su tutte le foto | Committente |
 
-**Layout: dove si stampa.** I campi sono etichette da mettere nella **banda superiore** o in quella **inferiore**, aggiunte sopra e sotto la foto. In ogni banda si stampano in fila, separate da un punto; la nota della foto va a capo nella banda inferiore. Tieni premuta un'etichetta e trascinala, oppure toccala e poi tocca la destinazione:
+**Layout: dove si stampa.** I campi sono etichette nella **banda superiore** o in quella **inferiore**, aggiunte sopra e sotto la foto. In ogni banda si stampano in fila, separate da un punto; la nota della foto va a capo nella banda inferiore. Tocca un'etichetta per scegliere:
 
-- su una **banda**: il campo si stampa lì, in fondo alla fila. Con un'etichetta scelta, le frecce in alto la spostano prima o dopo;
-- su **un'altra etichetta**: le due si **concatenano** in una catena che stampa un valore unico, per esempio `3_Bagno_012`. Tocca il separatore fra due etichette per cambiarlo; l'icona delle impostazioni rinomina la catena (il nome serve nello ZIP) o la scioglie;
-- sul vassoio **Non stampati**: il campo si compila e vale per i nomi dello ZIP e per l'ordine delle foto, ma non va sulla foto.
+- in quale banda stamparla, oppure **Non stampare**: il campo si compila e vale per i nomi dello ZIP e per l'ordine delle foto, ma non va sulla foto (lo ritrovi nel vassoio «Non stampati»);
+- **Prima** o **Dopo**, per l'ordine nella banda.
+
+**Catene.** Con **Nuova catena…** unisci più campi in un valore unico, per esempio `3_Bagno_012`: tocca i campi nell'ordine in cui vanno uniti, sistemalo con le frecce, scegli separatore e banda e dai un nome alla catena (serve nei nomi dello ZIP). Nella banda la catena è un'etichetta sola: toccala per modificarla o scioglierla.
 
 I template si gestiscono da Impostazioni › **Template di sopralluogo**. Si possono condividere e importare su un altro telefono; con **Copia i campi da…** riprendi i campi di un altro sopralluogo o template.
 
