@@ -1,9 +1,5 @@
 package com.sambusek.fotonote
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -93,9 +89,7 @@ import kotlinx.coroutines.withContext
 
 // Componenti comuni dell'interfaccia (Material 3, versione compatta).
 
-private val SmallCorners: Shape get() = if (gridSkin) RectangleShape else RoundedCornerShape(6.dp)
-/** Angoli delle schede: vivi nello stile Griglia. */
-private fun corners(dp: Int): Shape = if (gridSkin) RectangleShape else RoundedCornerShape(dp.dp)
+private val SmallCorners = RoundedCornerShape(6.dp)
 private val ButtonPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
 
 /**
@@ -140,10 +134,8 @@ fun AppScreen(
             Text(claim, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         } else {
         if (brand) Text(
-            if (gridSkin) "PASTASHOOT" else "Pastashoot",
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontWeight = FontWeight.Bold, letterSpacing = if (gridSkin) 1.5.sp else 0.sp,
-            ),
+            "Pastashoot",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = cs.primary,
             modifier = Modifier.padding(start = 16.dp, top = 8.dp),
         )
@@ -166,8 +158,6 @@ fun AppScreen(
             Row(verticalAlignment = Alignment.CenterVertically, content = actions)
         }
         }
-        // stile Griglia: una linea sottile separa l'intestazione dal contenuto
-        if (gridSkin) HorizontalDivider(color = cs.outlineVariant)
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Column(narrow.fillMaxHeight(), content = content)
             if (fab != null) Box(Modifier.align(Alignment.BottomEnd).padding(16.dp)) { fab() }
@@ -236,23 +226,6 @@ fun OverflowMenu(items: List<Pair<String, () -> Unit>>) {
 /** Sezione: intestazione colorata e scheda con il contenuto. */
 @Composable
 fun Section(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    if (gridSkin) {
-        // Griglia: niente schede, una cella delimitata da linee con l'etichetta in maiuscolo
-        val line = MaterialTheme.colorScheme.outlineVariant
-        Column(
-            modifier.fillMaxWidth().drawBehind {
-                drawLine(line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
-            }.padding(horizontal = 4.dp, vertical = 10.dp)
-        ) {
-            Text(
-                title.uppercase(), style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.2.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
-            )
-            Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp), content = content)
-        }
-        return
-    }
     Column(modifier.fillMaxWidth().padding(top = 12.dp)) {
         Text(
             title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
@@ -367,15 +340,14 @@ fun StatusDot(ok: Boolean, pulse: Boolean = false) {
 fun Tag(text: String, strong: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     Text(
-        if (gridSkin) text.uppercase() else text,
+        text,
         style = MaterialTheme.typography.labelMedium,
         color = if (strong) cs.onPrimary else cs.onSecondaryContainer,
         maxLines = 1,
         modifier = Modifier
             .padding(start = 6.dp)
-            .clip(corners(4))
+            .clip(RoundedCornerShape(4.dp))
             .background(if (strong) cs.primary else cs.secondaryContainer)
-            .then(if (gridSkin && !strong) Modifier.border(1.dp, cs.outline) else Modifier)
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
@@ -396,7 +368,7 @@ fun ListRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(corners(6))
+            .clip(RoundedCornerShape(6.dp))
             .background(if (selected) cs.primaryContainer else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .heightIn(min = 52.dp)
@@ -544,9 +516,8 @@ fun InfoBanner(
         modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clip(corners(8))
+            .clip(RoundedCornerShape(8.dp))
             .background(cs.secondaryContainer)
-            .then(if (gridSkin) Modifier.border(1.dp, cs.outlineVariant) else Modifier)
             .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

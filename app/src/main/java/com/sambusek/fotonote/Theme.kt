@@ -1,7 +1,5 @@
 package com.sambusek.fotonote
 
-import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.luminance
 import android.app.Activity
 import android.content.Context
 import android.os.Build
@@ -30,12 +28,6 @@ import androidx.core.view.WindowCompat
 
 enum class ThemeMode(val label: String) { SYSTEM("Sistema"), LIGHT("Chiaro"), DARK("Scuro") }
 
-/** Stile dell'interfaccia: standard (Material) o "Griglia", piatto e compatto, sempre scuro. */
-enum class Skin(val label: String) { STANDARD("Standard"), GRID("Griglia") }
-
-/** Vero se è attivo lo stile Griglia (si può leggere da qualsiasi composable). */
-val gridSkin: Boolean get() = ThemeStore.skin == Skin.GRID
-
 /** Colori d'accento proposti; il primo (null) usa i colori del sistema (Material You, Android 12+). */
 val ACCENTS: List<Pair<String, Color?>> = listOf(
     "Sistema" to null,
@@ -47,7 +39,6 @@ val ACCENTS: List<Pair<String, Color?>> = listOf(
     "Arancio" to Color(0xFFD9661F),
     "Rosso" to Color(0xFFC62828),
     "Grafite" to Color(0xFF5F6B76),
-    "Lime" to Color(0xFF9DBF2E),
 )
 
 val dynamicColorAvailable = Build.VERSION.SDK_INT >= 31
@@ -57,8 +48,6 @@ object ThemeStore {
     var mode by mutableStateOf(ThemeMode.SYSTEM)
         private set
     var accent by mutableIntStateOf(0)
-        private set
-    var skin by mutableStateOf(Skin.STANDARD)
         private set
     private var loaded = false
 
@@ -71,12 +60,6 @@ object ThemeStore {
         mode = ThemeMode.entries.firstOrNull { it.name == p.getString("theme", null) } ?: ThemeMode.SYSTEM
         accent = p.getInt("accent", 0).coerceIn(ACCENTS.indices)
         if (accent == 0 && !dynamicColorAvailable) accent = 1
-        skin = Skin.entries.firstOrNull { it.name == p.getString("skin", null) } ?: Skin.STANDARD
-    }
-
-    fun setSkin(c: Context, s: Skin) {
-        skin = s
-        prefs(c).edit().putString("skin", s.name).apply()
     }
 
     fun setMode(c: Context, m: ThemeMode) {
@@ -124,46 +107,17 @@ private val CompactShapes = Shapes(
     extraLarge = RoundedCornerShape(12.dp),
 )
 
-/** Stile Griglia: nero, linee sottili grigie, accento scelto dalla tavolozza (più acceso, per lo sfondo nero). */
-private fun gridScheme(accent: Color): ColorScheme = darkColorScheme().copy(
-    primary = accent, onPrimary = if (accent.luminance() > 0.4f) Color.Black else Color.White,
-    primaryContainer = accent.copy(alpha = 0.22f).compositeOver(Color.Black), onPrimaryContainer = Color.White,
-    secondary = Color(0xFF9A9A9A), onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF1C1C1C), onSecondaryContainer = Color(0xFFE6E6E6),
-    tertiary = accent, onTertiary = Color.Black,
-    background = Color.Black, onBackground = Color.White,
-    surface = Color.Black, onSurface = Color.White,
-    surfaceVariant = Color(0xFF141414), onSurfaceVariant = Color(0xFF8C8C8C),
-    surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF080808),
-    surfaceContainer = Color(0xFF0E0E0E), surfaceContainerHigh = Color(0xFF141414),
-    surfaceContainerHighest = Color(0xFF1A1A1A), surfaceTint = Color.Transparent,
-    outline = Color(0xFF4A4A4A), outlineVariant = Color(0xFF2E2E2E),
-    error = Color(0xFFFF6B5E), onError = Color.Black,
-)
-
-/** Angoli vivi. */
-private val GridShapes = Shapes(
-    extraSmall = RoundedCornerShape(0.dp), small = RoundedCornerShape(0.dp), medium = RoundedCornerShape(0.dp),
-    large = RoundedCornerShape(0.dp), extraLarge = RoundedCornerShape(0.dp),
-)
-
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     val ctx = LocalContext.current
     ThemeStore.load(ctx)
-    val grid = ThemeStore.skin == Skin.GRID
-    val dark = if (grid) true else when (ThemeStore.mode) {
+    val dark = when (ThemeStore.mode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
     val seed = ACCENTS[ThemeStore.accent].second
     val scheme = when {
-        // Griglia: l'accento scelto, schiarito per lo sfondo nero; "Sistema" usa il colore di Android
-        grid -> gridScheme(
-            seed?.let { tone(it, 0.66f, 1.15f) }
-                ?: if (dynamicColorAvailable) dynamicDarkColorScheme(ctx).primary else Color(0xFF7FA2F0)
-        )
         seed != null -> accentScheme(seed, dark)
         dynamicColorAvailable -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
         else -> if (dark) darkColorScheme() else lightColorScheme()
@@ -177,5 +131,5 @@ fun AppTheme(content: @Composable () -> Unit) {
             isAppearanceLightNavigationBars = !dark
         }
     }
-    MaterialTheme(colorScheme = scheme, shapes = if (grid) GridShapes else CompactShapes, content = content)
+    MaterialTheme(colorScheme = scheme, shapes = CompactShapes, content = content)
 }

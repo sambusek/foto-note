@@ -537,21 +537,7 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
             }
 
             Section("Tema") {
-                // stile dell'interfaccia: lo standard resta sempre disponibile
-                Caption("Stile")
-                Spacer(Modifier.height(6.dp))
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    Skin.entries.forEachIndexed { i, sk ->
-                        SegmentedButton(
-                            selected = ThemeStore.skin == sk,
-                            onClick = { ThemeStore.setSkin(ctx, sk) },
-                            shape = SegmentedButtonDefaults.itemShape(i, Skin.entries.size),
-                        ) { Text(sk.label) }
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                if (ThemeStore.skin == Skin.GRID) Caption("Lo stile Griglia è piatto, compatto e sempre scuro.")
-                else SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     ThemeMode.entries.forEachIndexed { i, m ->
                         SegmentedButton(
                             selected = ThemeStore.mode == m,
