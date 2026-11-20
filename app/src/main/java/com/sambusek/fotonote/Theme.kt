@@ -43,11 +43,17 @@ val ACCENTS: List<Pair<String, Color?>> = listOf(
 
 val dynamicColorAvailable = Build.VERSION.SDK_INT >= 31
 
+/** Indice dell'accento personalizzato, scelto col selettore (dopo quelli della tavolozza). */
+val CUSTOM_ACCENT: Int get() = ACCENTS.size
+
 /** Tema scelto dall'utente; condiviso da tutte le schermate, si applica al volo. */
 object ThemeStore {
     var mode by mutableStateOf(ThemeMode.SYSTEM)
         private set
     var accent by mutableIntStateOf(0)
+        private set
+    /** Colore scelto col selettore. */
+    var custom by mutableStateOf(Color(0xFF3F6FD8))
         private set
     private var loaded = false
 
@@ -58,7 +64,8 @@ object ThemeStore {
         loaded = true
         val p = prefs(c)
         mode = ThemeMode.entries.firstOrNull { it.name == p.getString("theme", null) } ?: ThemeMode.SYSTEM
-        accent = p.getInt("accent", 0).coerceIn(ACCENTS.indices)
+        accent = p.getInt("accent", 0).coerceIn(0, CUSTOM_ACCENT)
+        custom = Color(p.getInt("accent_custom", 0xFF3F6FD8.toInt()))
         if (accent == 0 && !dynamicColorAvailable) accent = 1
     }
 
@@ -67,6 +74,15 @@ object ThemeStore {
         prefs(c).edit().putString("theme", m.name).apply()
     }
 
+    fun setCustom(c: Context, color: Color) {
+        custom = color
+        accent = CUSTOM_ACCENT
+        prefs(c).edit().putInt("accent_custom", color.toArgb()).putInt("accent", CUSTOM_ACCENT).apply()
+    }
+
+    /** Nome dell'accento attuale. */
+    val accentName: String get() = if (accent == CUSTOM_ACCENT) "Personalizzato" else ACCENTS[accent].first
+
     fun setAccent(c: Context, i: Int) {
         accent = i
         prefs(c).edit().putInt("accent", i).apply()
@@ -74,7 +90,7 @@ object ThemeStore {
 }
 
 /** Stessa tinta dell'accento con luminosità (e saturazione) diverse. */
-private fun tone(c: Color, lightness: Float, saturation: Float = 1f): Color {
+internal fun tone(c: Color, lightness: Float, saturation: Float = 1f): Color {
     val hsl = FloatArray(3)
     ColorUtils.colorToHSL(c.toArgb(), hsl)
     hsl[1] = (hsl[1] * saturation).coerceIn(0f, 1f)
@@ -116,7 +132,7 @@ fun AppTheme(content: @Composable () -> Unit) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val seed = ACCENTS[ThemeStore.accent].second
+    val seed = if (ThemeStore.accent == CUSTOM_ACCENT) ThemeStore.custom else ACCENTS[ThemeStore.accent].second
     val scheme = when {
         seed != null -> accentScheme(seed, dark)
         dynamicColorAvailable -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)

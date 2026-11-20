@@ -1,5 +1,16 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.SmallFloatingActionButton
 import android.Manifest
@@ -547,7 +558,7 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                Caption("Colore d'accento: ${ACCENTS[ThemeStore.accent].first}")
+                Caption("Colore d'accento: ${ThemeStore.accentName}")
                 Spacer(Modifier.height(8.dp))
                 AccentPicker()
             }
@@ -622,7 +633,109 @@ private fun AccentPicker() {
                 if (selected) Icon(AppIcons.Check, name, tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
+        // colore libero, dal selettore
+        var picking by remember { mutableStateOf(false) }
+        val isCustom = ThemeStore.accent == CUSTOM_ACCENT
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .border(if (isCustom) 3.dp else 0.dp, ring, CircleShape)
+                .padding(if (isCustom) 5.dp else 0.dp)
+                .clip(CircleShape)
+                .background(if (isCustom) Brush.linearGradient(listOf(ThemeStore.custom, ThemeStore.custom)) else HueBrush)
+                .clickable { picking = true },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(if (isCustom) AppIcons.Check else AppIcons.Add, "Colore personalizzato", tint = Color.White, modifier = Modifier.size(18.dp))
+        }
+        if (picking) ColorPickerDialog(ThemeStore.custom, onPick = { ThemeStore.setCustom(ctx, it); picking = false }, onDismiss = { picking = false })
     }
+}
+
+/** Arcobaleno delle tinte, da rosso a rosso. */
+private val HueBrush = Brush.sweepGradient(
+    listOf(0f, 60f, 120f, 180f, 240f, 300f, 360f).map { Color.hsv(it % 360f, 0.85f, 0.9f) }
+)
+
+/**
+ * Selettore del colore d'accento: tinta e intensità. La luminosità la decide il tema
+ * (più scura nel chiaro, più chiara nello scuro), così i testi restano sempre leggibili.
+ */
+@Composable
+private fun ColorPickerDialog(initial: Color, onPick: (Color) -> Unit, onDismiss: () -> Unit) {
+    val hsv = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(initial.toArgb(), it) } }
+    var hue by remember { mutableStateOf(hsv[0]) }
+    var sat by remember { mutableStateOf(hsv[1].coerceIn(0.15f, 1f)) }
+    val color = Color.hsv(hue, sat, 0.85f)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        title = { Text("Colore d'accento") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Caption("Tinta")
+                GradientSlider(
+                    hue / 360f, { hue = it * 360f },
+                    Brush.horizontalGradient((0..6).map { Color.hsv((it * 60f) % 360f, 0.9f, 0.9f) }),
+                )
+                Caption("Intensità")
+                GradientSlider(
+                    (sat - 0.15f) / 0.85f, { sat = 0.15f + it * 0.85f },
+                    Brush.horizontalGradient(listOf(Color.hsv(hue, 0.15f, 0.85f), Color.hsv(hue, 1f, 0.85f))),
+                )
+                // anteprima come apparirà: pulsante nel tema chiaro e in quello scuro
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((label, bg, l) in listOf(Triple("Tema chiaro", Color.White, 0.42f), Triple("Tema scuro", Color(0xFF141218), 0.78f))) {
+                        Column(
+                            Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(bg).padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = if (l < 0.5f) Color.DarkGray else Color.LightGray)
+                            Text(
+                                "Pastashoot", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = tone(color, l),
+                            )
+                            Box(
+                                Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(6.dp)).background(tone(color, l)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("Pulsante", style = MaterialTheme.typography.labelMedium, color = if (l < 0.5f) Color.White else tone(color, 0.16f))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton({ onPick(color) }) { Text("Usa questo colore") } },
+        dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
+    )
+}
+
+/** Cursore su una barra sfumata: si tocca o si trascina; [value] fra 0 e 1. */
+@Composable
+private fun GradientSlider(value: Float, onChange: (Float) -> Unit, brush: Brush) {
+    val change by rememberUpdatedState(onChange)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .pointerInput(Unit) {
+                fun set(x: Float) = change((x / size.width).coerceIn(0f, 1f))
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    set(down.position.x)
+                    drag(down.id) { set(it.position.x); it.consume() }
+                }
+            }
+            .drawBehind {
+                val h = 14.dp.toPx(); val y = (size.height - h) / 2
+                drawRoundRect(brush, Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
+                val x = value.coerceIn(0f, 1f) * size.width
+                drawCircle(Color.White, 11.dp.toPx(), Offset(x, size.height / 2))
+                drawCircle(Color.Black.copy(alpha = 0.35f), 11.dp.toPx(), Offset(x, size.height / 2), style = Stroke(1.5.dp.toPx()))
+            },
+    )
 }
 
 @Composable
