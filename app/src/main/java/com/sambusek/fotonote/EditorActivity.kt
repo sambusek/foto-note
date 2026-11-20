@@ -269,6 +269,8 @@ private fun EditorScreen(
             BarAction("Salva", { save(false) }, primary = true, enabled = ready)
             OverflowMenu(
                 listOfNotNull(
+                    // posizione della foto sulle tavole del cantiere
+                    if (session != null) "Posiziona sulla pianta…" to { ctx.startActivity(PlanActivity.intent(ctx, session.id, uri)) } else null,
                     if (ink.strokes.isNotEmpty()) "Cancella tutti i tratti" to { ink.clearAll() } else null,
                     if (!ink.pad.isZero) "Togli lo spazio bianco" to { ink.changePad(Pad()) } else null,
                     (if (canvasMode) "Torna al disegno" else "Allarga la tela…") to { canvasMode = !canvasMode },

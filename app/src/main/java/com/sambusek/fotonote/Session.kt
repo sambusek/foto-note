@@ -121,6 +121,12 @@ data class Session(
     val presets: List<Preset> = emptyList(),
     /** Ordine delle foto scelto per report e ZIP. */
     val photoOrder: PhotoOrder = PhotoOrder(),
+    /** Cantiere a cui appartiene (null = "Generico"). */
+    val siteId: String? = null,
+    /** Posizione delle foto sulle tavole del cantiere, per foto (uri). */
+    val pins: Map<String, Pin> = emptyMap(),
+    /** Revisione usata per ogni tavola (id tavola → id revisione); assente = la più recente. */
+    val planRevs: Map<String, String> = emptyMap(),
 ) {
     /** Valori precompilati per una foto scattata a [ms]. */
     fun presetAt(ms: Long): Map<String, String> = presets.lastOrNull { it.time <= ms }?.values.orEmpty()
@@ -216,6 +222,9 @@ internal fun Session.toJson(): JSONObject {
         .put("zipPattern", zipPattern)
         .put("generalNote", generalNote)
         .put("pauses", JSONArray().also { a -> pauses.forEach { a.put(JSONArray().put(it.start).put(it.end)) } })
+        .apply { siteId?.let { put("siteId", it) } }
+        .put("pins", JSONObject().also { o -> pins.forEach { (k, v) -> o.put(k, v.toJson()) } })
+        .put("planRevs", JSONObject(planRevs as Map<*, *>))
         .put("photoOrder", JSONObject().put("mode", photoOrder.mode)
             .put("fields", JSONArray(photoOrder.fields)).put("manual", JSONArray(photoOrder.manual)))
         .put("presets", JSONArray().also { a ->
@@ -249,6 +258,11 @@ internal fun sessionFromJson(o: JSONObject): Session {
         pauses = o.optJSONArray("pauses")?.let { a ->
             (0 until a.length()).map { val p = a.getJSONArray(it); Pause(p.getLong(0), p.optLong(1, 0L)) }
         }.orEmpty(),
+        siteId = o.optString("siteId").ifBlank { null },
+        pins = o.optJSONObject("pins")?.let { p ->
+            p.keys().asSequence().mapNotNull { k -> runCatching { k to pinFromJson(p.getJSONObject(k)) }.getOrNull() }.toMap()
+        }.orEmpty(),
+        planRevs = o.optJSONObject("planRevs")?.stringMap().orEmpty(),
         photoOrder = o.optJSONObject("photoOrder")?.let { p ->
             PhotoOrder(
                 p.optString("mode", "taken"),
@@ -347,11 +361,14 @@ object SessionStore {
     }
 
     /** Nuova sessione, con i campi di un template oppure senza campi. */
-    fun create(c: Context, name: String, fields: List<NoteField> = emptyList()): Session {
+    fun create(c: Context, name: String, fields: List<NoteField> = emptyList(), siteId: String? = null): Session {
         pauseOthers(c)
         val start = System.currentTimeMillis()
         val folder = uniqueFolder(c, folderName(start, name))
-        return Session(id = start.toString(), name = name.trim(), folder = folder, start = start, fields = fields)
+        return Session(
+            id = start.toString(), name = name.trim(), folder = folder, start = start, fields = fields,
+            siteId = siteId?.takeIf { it != SiteStore.GENERIC },
+        )
             .also { save(c, it) }
     }
 

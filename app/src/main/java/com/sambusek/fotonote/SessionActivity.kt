@@ -345,6 +345,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                         "Rinomina…" to { renaming = true },
                         "Nota generale…" to { editNote = true },
                         "Aggiungi foto già scattate…" to { picking = true },
+                        "Planimetrie…" to { ctx.startActivity(PlanActivity.intent(ctx, s.id)) },
                         "Campi e layout…" to { layoutEdit = true },
                         "Esporta per un altro telefono…" to {
                             SessionOps.exportPackage(ctx, s) { f ->

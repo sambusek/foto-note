@@ -106,10 +106,12 @@ class MainActivity : ComponentActivity() {
             AppTheme {
                 var user by remember { mutableStateOf(Prefs.userName(this)) }
                 var settings by rememberSaveable { mutableStateOf(false) }
+                var sites by rememberSaveable { mutableStateOf(false) }
                 when {
                     user.isBlank() -> WelcomeScreen { Prefs.setUserName(this, it); user = it }
                     settings -> SettingsScreen(tick, onNameChange = { user = it }) { settings = false }
-                    else -> HomeScreen(tick, user) { settings = true }
+                    sites -> SitesScreen { sites = false; tick.intValue++ }
+                    else -> HomeScreen(tick, user, onSites = { sites = true }) { settings = true }
                 }
             }
         }
@@ -189,7 +191,7 @@ private fun WelcomeScreen(onDone: (String) -> Unit) {
 // ------------------------------------------------------------------ home: i sopralluoghi
 
 @Composable
-private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Unit) {
+private fun HomeScreen(tick: MutableIntState, user: String, onSites: () -> Unit, onSettings: () -> Unit) {
     val ctx = LocalContext.current
     val t = tick.intValue
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -203,6 +205,7 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
     val active = open.firstOrNull { !it.paused }
     val paused = open.filter { it.paused }
     val closed = sessions.filter { !it.open }
+    val siteNames = remember(t) { SiteStore.all(ctx).associate { it.id to it.name } }
     val activeCount = remember(t, active?.id) {
         active?.let { s -> SessionStore.photos(ctx, s).count { it.uri.toString() !in s.excluded } } ?: 0
     }
@@ -249,10 +252,13 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
     }
 
     if (askName) NewSessionDialog(
-        templates = remember { TemplateStore.all(ctx) },
-        onConfirm = { name, template ->
+        sites = remember { SiteStore.all(ctx) },
+        lastSite = remember { ctx.getSharedPreferences("fotonote", 0).getString("last_site", null) },
+        onConfirm = { name, site ->
             askName = false
-            val s = SessionStore.create(ctx, name, template?.fields.orEmpty())
+            ctx.getSharedPreferences("fotonote", 0).edit().putString("last_site", site.id).apply()
+            // i campi del nuovo sopralluogo vengono dal cantiere
+            val s = SessionStore.create(ctx, name, site.fields, site.id)
             ctx.startActivity(SessionActivity.intent(ctx, s.id))
         },
         onDismiss = { askName = false },
@@ -346,6 +352,8 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
         val saved: @Composable ColumnScope.() -> Unit = {
             Section("Sopralluoghi salvati") {
                 if (!selecting) {
+                    ActionRow(AppIcons.Layout, "Cantieri e planimetrie", "${siteNames.size} cantieri") { onSites() }
+                    ListDivider()
                     ActionRow(AppIcons.Add, "Importa un sopralluogo…", "Da un file ricevuto da un altro telefono") {
                         packagePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
                     }
@@ -353,8 +361,14 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
                 }
                 if (closed.isEmpty()) Caption("Ancora nessuno. I sopralluoghi chiusi compaiono qui.")
                 else if (!selecting) Caption("Tieni premuto un sopralluogo per selezionarne più di uno.")
-                closed.forEachIndexed { i, s ->
-                    if (i > 0) ListDivider()
+                closed.sortedWith(compareBy({ siteNames[it.siteId ?: SiteStore.GENERIC] ?: "" }, { -it.start })).forEachIndexed { i, s ->
+                    // intestazione del cantiere quando cambia
+                    val siteName = siteNames[s.siteId ?: SiteStore.GENERIC] ?: "Generico"
+                    val prev = closed.sortedWith(compareBy({ siteNames[it.siteId ?: SiteStore.GENERIC] ?: "" }, { -it.start })).getOrNull(i - 1)
+                    if (prev == null || (siteNames[prev.siteId ?: SiteStore.GENERIC] ?: "Generico") != siteName) Text(
+                        siteName.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                    ) else ListDivider()
                     ListRow(
                         s.folder, "${s.items.size} foto · ${dayOnly.format(Date(s.start))}",
                         tags = listOfNotNull(s.versionTag?.let { it to false }),
@@ -380,46 +394,49 @@ private fun HomeScreen(tick: MutableIntState, user: String, onSettings: () -> Un
     }
 }
 
-/** Nome del nuovo sopralluogo e, se ce ne sono, il template da cui prendere i campi. */
+/** Nome del nuovo sopralluogo e cantiere (anche uno nuovo, con i campi di un template). */
 @Composable
-private fun NewSessionDialog(templates: List<Template>, onConfirm: (String, Template?) -> Unit, onDismiss: () -> Unit) {
+private fun NewSessionDialog(sites: List<Site>, lastSite: String?, onConfirm: (String, Site) -> Unit, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
     var name by remember { mutableStateOf("") }
-    var template by remember { mutableStateOf<Template?>(null) }
+    var site by remember { mutableStateOf(sites.firstOrNull { it.id == lastSite } ?: sites.first()) }
     var open by remember { mutableStateOf(false) }
+    var newSite by remember { mutableStateOf(false) }
+    if (newSite) {
+        NewSiteDialog(
+            onConfirm = { n, t -> site = SiteStore.create(ctx, n, t?.fields.orEmpty()); newSite = false },
+            onDismiss = { newSite = false },
+        )
+        return
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(12.dp),
         title = { Text("Nuovo sopralluogo") },
         text = {
             Column {
-                Text("Il nome diventerà anche il nome della cartella.")
+                Text("Cantiere", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+                Box {
+                    AppButton(site.name, { open = true }, Modifier.fillMaxWidth())
+                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                        for (st in sites) DropdownMenuItem(
+                            text = { Column { Text(st.name); Caption("${st.plans.size} tavole · ${st.fields.summary()}") } },
+                            onClick = { site = st; open = false },
+                        )
+                        DropdownMenuItem(text = { Text("Nuovo cantiere…") }, onClick = { open = false; newSite = true })
+                    }
+                }
+                Caption("Campi: ${site.fields.summary()}", Modifier.padding(top = 4.dp))
+                Text("Nome del sopralluogo", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
                 OutlinedTextField(
                     value = name, onValueChange = { name = it.replace("\n", " ") }, singleLine = true,
-                    placeholder = { Text("es. Via Roma piano 3") }, shape = RoundedCornerShape(4.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    placeholder = { Text("es. SAL piano 3") }, shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 )
-                if (templates.isNotEmpty()) {
-                    Text("Template", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
-                    Box {
-                        AppButton(template?.name ?: "Nessuno (senza campi)", { open = true }, Modifier.fillMaxWidth())
-                        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                            DropdownMenuItem(text = { Text("Nessuno (senza campi)") }, onClick = { template = null; open = false })
-                            for (t in templates) DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(t.name)
-                                        Caption(t.fields.summary())
-                                    }
-                                },
-                                onClick = { template = t; open = false },
-                            )
-                        }
-                    }
-                    template?.let { Caption(it.fields.summary(), Modifier.padding(top = 4.dp)) }
-                }
+                Caption("Il nome diventerà anche il nome della cartella.", Modifier.padding(top = 4.dp))
             }
         },
-        confirmButton = { TextButton({ onConfirm(name.trim(), template) }, enabled = name.isNotBlank()) { Text("Inizia") } },
+        confirmButton = { TextButton({ onConfirm(name.trim(), site) }, enabled = name.isNotBlank()) { Text("Inizia") } },
         dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
     )
 }
