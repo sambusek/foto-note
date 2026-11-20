@@ -112,6 +112,8 @@ private fun PlanScreen(sessionId: String, startPhoto: String?, tick: MutableIntS
     val plan = site.plans.firstOrNull { it.id == planId } ?: site.plans.firstOrNull()
     val photos by produceState(emptyList<Photo>(), t) { value = withContext(Dispatchers.IO) { SessionStore.photos(ctx, s) } }
     var selected by remember { mutableStateOf(startPhoto) }
+    // un pin già messo è bloccato: si sblocca tenendolo premuto (o con «Sposta») e allora pulsa
+    var unlocked by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -169,12 +171,22 @@ private fun PlanScreen(sessionId: String, startPhoto: String?, tick: MutableIntS
         PlanCanvas(
             site.id, rev, s.pins.filter { it.value.plan == plan.id }, numbers, selected,
             Modifier.weight(1f).fillMaxWidth(),
-            onPinTap = { selected = it },
+            unlocked = unlocked,
+            onPinTap = { selected = it; if (unlocked != it) unlocked = null },
+            onPinLongPress = { key ->
+                selected = key
+                if (s.open) unlocked = key
+                else Toast.makeText(ctx, "Il sopralluogo è chiuso: i pin non si modificano", Toast.LENGTH_SHORT).show()
+            },
             onPlace = { x, y ->
                 val key = selected
                 if (!s.open) Toast.makeText(ctx, "Il sopralluogo è chiuso: i pin non si modificano", Toast.LENGTH_SHORT).show()
                 else if (key == null) Toast.makeText(ctx, "Scegli prima una foto qui sotto", Toast.LENGTH_SHORT).show()
+                else if (key in s.pins && unlocked != key) Toast.makeText(
+                    ctx, "Il pin è bloccato: tienilo premuto, o tocca «Sposta», per spostarlo", Toast.LENGTH_SHORT,
+                ).show()
                 else {
+                    unlocked = null
                     val old = s.pins[key]
                     SessionStore.save(ctx, s.copy(
                         pins = s.pins + (key to Pin(plan.id, rev.id, x, y, old?.dir)),
@@ -187,9 +199,13 @@ private fun PlanScreen(sessionId: String, startPhoto: String?, tick: MutableIntS
                 }
             },
         )
-        PhotoStrip(photos, s, plan, selected, numbers, onSelect = { selected = it }, onRemovePin = { key ->
-            SessionStore.save(ctx, s.copy(pins = s.pins - key)); refresh++
-        }, onOpen = { key -> ctx.startActivity(EditorActivity.intent(ctx, Uri.parse(key), s.id)) })
+        PhotoStrip(
+            photos, s, plan, selected, numbers, unlocked,
+            onSelect = { selected = it; unlocked = null },
+            onUnlock = { key -> unlocked = if (unlocked == key) null else key },
+            onRemovePin = { key -> unlocked = null; SessionStore.save(ctx, s.copy(pins = s.pins - key)); refresh++ },
+            onOpen = { key -> ctx.startActivity(EditorActivity.intent(ctx, Uri.parse(key), s.id)) },
+        )
     }
 }
 
@@ -202,9 +218,19 @@ private fun PlanCanvas(
     numbers: Map<String, Int>,
     selected: String?,
     modifier: Modifier,
+    unlocked: String?,
     onPinTap: (String) -> Unit,
+    onPinLongPress: (String) -> Unit,
     onPlace: (Float, Float) -> Unit,
 ) {
+    // pulsazione del pin sbloccato
+    val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "pin").animateFloat(
+        0f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(1100, easing = androidx.compose.animation.core.LinearOutSlowInEasing),
+        ),
+        label = "pulse",
+    )
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     val image by produceState<ImageBitmap?>(null, rev.id) {
@@ -240,15 +266,19 @@ private fun PlanCanvas(
                         scale = ns
                     }
                 }
-                .pointerInput(rev.id, pins, selected) {
-                    detectTapGestures { p ->
-                        // prima i pin (entro un dito), poi la pianta
-                        val hit = pins.entries.minByOrNull { (_, pin) ->
-                            (origin + Offset(pin.x * img.width, pin.y * img.height) * scale - p).getDistance()
-                        }?.takeIf { (_, pin) ->
-                            (origin + Offset(pin.x * img.width, pin.y * img.height) * scale - p).getDistance() < 22.dp.toPx()
-                        }
-                        if (hit != null && hit.key != selected) onPinTap(hit.key)
+                .pointerInput(rev.id, pins, selected, unlocked) {
+                    // il pin più vicino entro un dito
+                    fun hit(p: Offset) = pins.entries.minByOrNull { (_, pin) ->
+                        (origin + Offset(pin.x * img.width, pin.y * img.height) * scale - p).getDistance()
+                    }?.takeIf { (_, pin) ->
+                        (origin + Offset(pin.x * img.width, pin.y * img.height) * scale - p).getDistance() < 22.dp.toPx()
+                    }
+                    detectTapGestures(
+                        onLongPress = { p -> hit(p)?.let { onPinLongPress(it.key) } },
+                    ) { p ->
+                        val hit = hit(p)
+                        // toccare un pin lo sceglie; con un pin sbloccato il tocco lo sposta
+                        if (hit != null && hit.key != unlocked) onPinTap(hit.key)
                         else {
                             val q = (p - origin) / scale
                             val x = q.x / img.width; val y = q.y / img.height
@@ -276,7 +306,11 @@ private fun PlanCanvas(
                 }
                 drawCircle(Color.White, rr + 2.dp.toPx(), c)
                 drawCircle(if (sel) cs.primary else cs.primary.copy(alpha = 0.85f), rr, c)
-                if (sel) drawCircle(cs.primary, rr + 6.dp.toPx(), c, style = Stroke(2.dp.toPx()))
+                if (key == unlocked) {
+                    // sbloccato: anelli che si allargano e svaniscono
+                    drawCircle(cs.primary.copy(alpha = 0.6f * (1f - pulse)), rr + (6 + 18 * pulse).dp.toPx(), c, style = Stroke(3.dp.toPx()))
+                    drawCircle(cs.primary.copy(alpha = 0.25f * (1f - pulse)), rr + (18 * pulse).dp.toPx(), c)
+                } else if (sel) drawCircle(cs.primary, rr + 6.dp.toPx(), c, style = Stroke(2.dp.toPx()))
                 drawIntoCanvas {
                     numberPaint.color = cs.onPrimary.toArgb()
                     it.nativeCanvas.drawText("${numbers[key] ?: "?"}", c.x, c.y + numberPaint.textSize / 3, numberPaint)
@@ -294,7 +328,9 @@ private fun PhotoStrip(
     plan: Plan,
     selected: String?,
     numbers: Map<String, Int>,
+    unlocked: String?,
     onSelect: (String) -> Unit,
+    onUnlock: (String) -> Unit,
     onRemovePin: (String) -> Unit,
     onOpen: (String) -> Unit,
 ) {
@@ -311,14 +347,18 @@ private fun PhotoStrip(
                 when {
                     selected == null -> "Scegli una foto e tocca la pianta nel punto in cui l'hai scattata."
                     pin == null -> "Foto ${numbers[selected]}: tocca la pianta per posizionarla."
-                    pin.plan != plan.id -> "Foto ${numbers[selected]}: è su un'altra tavola; tocca qui per spostarla."
-                    else -> "Foto ${numbers[selected]}: tocca un altro punto per spostarla."
+                    unlocked == selected -> "Foto ${numbers[selected]}: pin sbloccato, tocca il punto in cui spostarlo."
+                    pin.plan != plan.id -> "Foto ${numbers[selected]}: è su un'altra tavola. «Sposta» per portarla qui."
+                    else -> "Foto ${numbers[selected]}: pin bloccato. Tienilo premuto o tocca «Sposta» per spostarlo."
                 },
                 Modifier.weight(1f),
             )
             if (selected != null) {
                 BarAction("Apri", { onOpen(selected) })
-                if (pin != null && s.open) BarAction("Togli", { onRemovePin(selected) })
+                if (pin != null && s.open) {
+                    BarAction(if (unlocked == selected) "Blocca" else "Sposta", { onUnlock(selected) })
+                    BarAction("Togli", { onRemovePin(selected) })
+                }
             }
         }
         LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(4.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {

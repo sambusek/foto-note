@@ -20,7 +20,7 @@ Il **cantiere** raccoglie nel tempo i sopralluoghi dello stesso luogo, con le su
 - **Nuova revisione…** (toccando una tavola): carichi la versione aggiornata. Vale per i prossimi sopralluoghi; quelli chiusi restano sulla revisione che usavano. Un sopralluogo ancora aperto ti propone di passare alla nuova, con i pin nello stesso punto della pagina.
 - I sopralluoghi creati prima dei cantieri, e quelli veloci, stanno nel cantiere **Generico**.
 
-**Pin delle foto.** Nel sopralluogo apri ⋮ › **Planimetrie…**: scegli una foto nella striscia in basso e tocca la pianta nel punto in cui l'hai scattata; si passa da soli alla foto successiva senza pin. Con due dita ingrandisci e sposti la pianta. Toccando un pin scegli la sua foto, per spostarla, toglierla o aprirla. Dall'editor di una foto c'è anche ⋮ › **Posiziona sulla pianta…**.
+**Pin delle foto.** Nel sopralluogo apri ⋮ › **Planimetrie…**: scegli una foto nella striscia in basso e tocca la pianta nel punto in cui l'hai scattata; si passa da soli alla foto successiva senza pin. Con due dita ingrandisci e sposti la pianta. Toccando un pin scegli la sua foto. I pin già messi sono **bloccati**: per spostarne uno tienilo premuto (oppure tocca **Sposta**), comincia a pulsare e il tocco successivo sulla pianta lo sposta; poi torna bloccato. Dall'editor di una foto c'è anche ⋮ › **Posiziona sulla pianta…**.
 
 ## Fare un sopralluogo
 
