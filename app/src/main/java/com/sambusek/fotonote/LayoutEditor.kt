@@ -1,5 +1,8 @@
 package com.sambusek.fotonote
 
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -57,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** Editor del layout delle note di una sessione: campi con nome, tipo e posizione. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LayoutScreen(
     initial: List<NoteField>,
@@ -105,99 +109,46 @@ fun LayoutScreen(
                 fields.clear()
                 fields += src.fields
             }
-            Section("Schema") { LayoutPreview(fields) }
-            Section("Campi") {
-                // modalità "Concatena": si scelgono i campi da riunire in un gruppo
-                var concat by remember { mutableStateOf(false) }
-                val picked = remember { mutableStateListOf<String>() }
-                if (fields.isEmpty()) Caption(
+            // due pagine: cosa si compila (Campi) e dove si stampa (Layout)
+            var tab by remember { mutableStateOf(0) }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                listOf("Campi", "Layout").forEachIndexed { i, l ->
+                    SegmentedButton(selected = tab == i, onClick = { tab = i }, shape = SegmentedButtonDefaults.itemShape(i, 2)) { Text(l) }
+                }
+            }
+            if (tab == 1) Section("Layout") { LayoutBoard(fields) }
+            else Section("Campi") {
+                val list = fields.filter { it.kind != FieldKind.COMBINED }
+                if (list.isEmpty()) Caption(
                     "Nessun campo: sulle foto ci sarà solo la nota, nella banda inferiore. " +
                         "Aggiungi un campo o copia lo schema di un template o di un sopralluogo precedente."
                 )
-                val inGroup = grouped(fields)
-                // blocchi della lista: i gruppi (con i loro campi) e i campi singoli
-                val blocks = fields.filter { it.id !in inGroup }
-                val free = blocks.filter { it.kind != FieldKind.COMBINED }
-
-                /** Ricompone la lista: ogni gruppo seguito dai suoi campi, nell'ordine del gruppo. */
-                fun rebuild(order: List<NoteField>) {
-                    val byId = fields.associateBy { it.id }
-                    val out = order.flatMap { bl ->
-                        val cur = byId[bl.id] ?: bl
-                        if (cur.kind == FieldKind.COMBINED) listOf(cur) + cur.parts.mapNotNull { byId[it] } else listOf(cur)
-                    }
-                    fields.clear(); fields.addAll(out)
+                else Caption("Qui definisci cosa si compila; nella pagina Layout scegli dove si stampa.")
+                fun move(i: Int, d: Int) {
+                    // l'ordine dei campi è quello del pannello dell'editor
+                    val a = fields.indexOf(list[i]); val b = fields.indexOf(list[i + d])
+                    val x = fields[a]; fields[a] = fields[b]; fields[b] = x
                 }
-                fun replace(f: NoteField) { val i = fields.indexOfFirst { it.id == f.id }; if (i >= 0) fields[i] = f }
-                fun removeField(id: String) {
-                    fields.removeAll { it.id == id }
-                    fields.replaceAll { o -> if (id in o.parts) o.copy(parts = o.parts - id) else o }
-                }
-                fun moveBlock(i: Int, d: Int) = rebuild(blocks.toMutableList().apply { add(i + d, removeAt(i)) })
-
-                if (concat) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Scegli i campi da concatenare", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        BarAction("Annulla", { concat = false; picked.clear() })
-                        AppButton("Fine", {
-                            val members = free.filter { it.id in picked }
-                            val n = fields.count { it.kind == FieldKind.COMBINED } + 1
-                            val group = NoteField(
-                                System.nanoTime().toString(), "Gruppo $n", members.first().pos,
-                                showLabel = false, kind = FieldKind.COMBINED, parts = members.map { it.id },
-                            )
-                            // il gruppo prende il posto del primo campo scelto
-                            val at = blocks.indexOfFirst { it.id in picked }
-                            rebuild(blocks.filter { it.id !in picked }.toMutableList().apply { add(at.coerceAtMost(size), group) })
-                            concat = false; picked.clear()
-                        }, primary = true, enabled = picked.size >= 2)
-                    }
-                    free.forEachIndexed { i, f ->
-                        key(f.id) {
-                            if (i > 0) ListDivider()
-                            Row(
-                                Modifier.fillMaxWidth()
-                                    .clickable { if (f.id in picked) picked.remove(f.id) else picked.add(f.id) }
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(f.id in picked, null)
-                                Column(Modifier.weight(1f).padding(start = 6.dp)) {
-                                    Text(f.label.ifBlank { f.kind.label }, style = MaterialTheme.typography.bodyLarge)
-                                    Caption(f.kind.label)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    if (free.size >= 2) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Caption("Unisci più campi in una riga sola, es. 3_Bagno_012", Modifier.weight(1f))
-                        AppButton("Concatena", { concat = true; picked.clear() })
-                    }
-                    blocks.forEachIndexed { bi, bl ->
-                        key(bl.id) {
-                            if (bi > 0) ListDivider()
-                            val up = if (bi > 0) ({ moveBlock(bi, -1) }) else null
-                            val down = if (bi < blocks.lastIndex) ({ moveBlock(bi, 1) }) else null
-                            if (bl.kind == FieldKind.COMBINED) GroupBlock(
-                                bl, fields,
-                                onChange = { replace(it); rebuild(blocks) },
-                                onUngroup = { fields.removeAll { it.id == bl.id } },
-                                onUp = up, onDown = down,
-                                onChangeMember = { replace(it) },
-                                onRemoveMember = { removeField(it) },
-                            ) else FieldEditor(
-                                bl, onChange = { replace(it) }, onRemove = { removeField(bl.id) },
-                                onUp = up, onDown = down,
-                            )
-                        }
+                list.forEachIndexed { i, f ->
+                    key(f.id) {
+                        if (i > 0) ListDivider()
+                        FieldEditor(
+                            f, onChange = { n -> val k = fields.indexOfFirst { it.id == f.id }; if (k >= 0) fields[k] = n },
+                            onRemove = {
+                                val l = fields.filter { it.id != f.id }.map { o -> if (f.id in o.parts) o.copy(parts = o.parts - f.id) else o }
+                                fields.clear(); fields.addAll(LayoutOps.normalize(l))
+                            },
+                            onUp = if (i > 0) ({ move(i, -1) }) else null,
+                            onDown = if (i < list.lastIndex) ({ move(i, 1) }) else null,
+                        )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 AddFieldButton { kind ->
+                    val slot = (fields.filter { it.placed && it.pos == kind.defaultPos }.maxOfOrNull { it.slot } ?: -1) + 1
                     fields += NoteField(
                         System.nanoTime().toString(), kind.defaultLabel, kind.defaultPos,
-                        showLabel = !kind.auto, kind = kind,
+                        showLabel = !kind.auto, kind = kind, slot = slot,
                     )
                 }
             }
@@ -212,111 +163,29 @@ private fun FieldEditor(
     onRemove: () -> Unit,
     onUp: (() -> Unit)? = null,
     onDown: (() -> Unit)? = null,
-    /** Campo dentro un gruppo: si stampa dove sta il gruppo; [onLeaveGroup] lo riporta fuori. */
-    onLeaveGroup: (() -> Unit)? = null,
 ) {
-    val inGroup = onLeaveGroup != null
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(f.label.ifBlank { f.kind.label }, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            // ordine dei campi: è anche l'ordine nel pannello dell'editor e sulla fascia
+            KindPicker(f.kind, Modifier.weight(1f)) { k ->
+                onChange(f.copy(kind = k, label = f.label.ifBlank { k.defaultLabel }, showLabel = !k.auto))
+            }
+            // ordine dei campi nel pannello dell'editor
             ToolIcon(AppIcons.Prev, "Sposta su", { onUp?.invoke() }, enabled = onUp != null, modifier = Modifier.rotate(90f))
             ToolIcon(AppIcons.Next, "Sposta giù", { onDown?.invoke() }, enabled = onDown != null, modifier = Modifier.rotate(90f))
-            if (onLeaveGroup != null) ToolIcon(AppIcons.Close, "Togli dal gruppo", onLeaveGroup)
             ToolIcon(AppIcons.Delete, "Elimina campo", onRemove)
         }
-        KindPicker(f.kind, Modifier.fillMaxWidth()) { k ->
-            onChange(f.copy(kind = k, label = f.label.ifBlank { k.defaultLabel }, showLabel = !k.auto))
-        }
         Caption(f.kind.description)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            CompactField(
-                f.label, { onChange(f.copy(label = it)) },
-                if (f.auto) "Etichetta (facoltativa)" else "Nome del campo, es. Piano", Modifier.weight(1f),
-            )
-            if (!inGroup) PositionPicker(f.pos) { onChange(f.copy(pos = it)) }
-        }
+        CompactField(
+            f.label, { onChange(f.copy(label = it)) },
+            if (f.auto) "Etichetta (facoltativa)" else "Nome del campo, es. Piano", Modifier.fillMaxWidth(),
+        )
         when (f.kind) {
             FieldKind.CHOICE -> ChoiceEditor(f, onChange)
             FieldKind.FIXED -> CompactField(f.text, { onChange(f.copy(text = it)) }, "Testo da stampare su ogni foto")
             else -> {}
         }
-        // con l'etichetta: "Piano: 3"; senza: solo "3"
-        if (!inGroup) SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
-    }
-}
-
-/**
- * Un gruppo concatenato con i suoi campi appesi sotto, uniti da una linea ad albero.
- * Sulla foto il gruppo stampa i valori dei campi in una riga, col separatore scelto.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun GroupBlock(
-    g: NoteField,
-    all: List<NoteField>,
-    onChange: (NoteField) -> Unit,
-    onUngroup: () -> Unit,
-    onUp: (() -> Unit)?,
-    onDown: (() -> Unit)?,
-    onChangeMember: (NoteField) -> Unit,
-    onRemoveMember: (String) -> Unit,
-) {
-    val members = g.parts.mapNotNull { id -> all.firstOrNull { it.id == id } }
-    val outside = all.filter { it.kind != FieldKind.COMBINED && it.id !in grouped(all) }
-    val line = MaterialTheme.colorScheme.primary
-    fun name(x: NoteField) = x.label.trim().ifEmpty { x.kind.defaultLabel.ifEmpty { "Campo" } }
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Tag(g.label.ifBlank { "Gruppo" })
-            Spacer(Modifier.weight(1f))
-            ToolIcon(AppIcons.Prev, "Sposta su", { onUp?.invoke() }, enabled = onUp != null, modifier = Modifier.rotate(90f))
-            ToolIcon(AppIcons.Next, "Sposta giù", { onDown?.invoke() }, enabled = onDown != null, modifier = Modifier.rotate(90f))
-            ToolIcon(AppIcons.Delete, "Sciogli il gruppo (i campi restano)", onUngroup)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            CompactField(g.label, { onChange(g.copy(label = it)) }, "Nome del gruppo, es. Codice", Modifier.weight(1f))
-            PositionPicker(g.pos) { onChange(g.copy(pos = it)) }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
-            Caption("Separatore", Modifier.align(Alignment.CenterVertically))
-            for (sep in listOf("_", "-", ".", " ")) FilterChip(
-                selected = g.separator == sep, onClick = { onChange(g.copy(separator = sep)) },
-                label = { Text(if (sep == " ") "spazio" else sep) },
-            )
-        }
-        Caption("Sulla foto: " + members.joinToString(g.separator) { name(it) })
-        // i campi del gruppo, appesi alla linea ad albero
-        members.forEachIndexed { i, m ->
-            val last = i == members.lastIndex
-            Column(
-                Modifier.fillMaxWidth().drawBehind {
-                    val x = 8.dp.toPx(); val y = 26.dp.toPx(); val w = 1.5.dp.toPx()
-                    drawLine(line, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, if (last) y else size.height), w)
-                    drawLine(line, androidx.compose.ui.geometry.Offset(x, y), androidx.compose.ui.geometry.Offset(x + 10.dp.toPx(), y), w)
-                    drawCircle(line, 3.5.dp.toPx(), androidx.compose.ui.geometry.Offset(x + 13.dp.toPx(), y))
-                }.padding(start = 26.dp)
-            ) {
-                FieldEditor(
-                    m, onChange = onChangeMember, onRemove = { onRemoveMember(m.id) },
-                    onUp = if (i > 0) ({ onChange(g.copy(parts = g.parts.toMutableList().apply { add(i - 1, removeAt(i)) })) }) else null,
-                    onDown = if (!last) ({ onChange(g.copy(parts = g.parts.toMutableList().apply { add(i + 1, removeAt(i)) })) }) else null,
-                    onLeaveGroup = { onChange(g.copy(parts = g.parts - m.id)) },
-                )
-            }
-        }
-        if (outside.isNotEmpty()) {
-            var open by remember { mutableStateOf(false) }
-            Box(Modifier.padding(start = 26.dp)) {
-                BarAction("Aggiungi un campo al gruppo", { open = true })
-                DropdownMenu(open, { open = false }) {
-                    for (o in outside) DropdownMenuItem(
-                        text = { Text(name(o)) },
-                        onClick = { open = false; onChange(g.copy(parts = g.parts + o.id)) },
-                    )
-                }
-            }
-        }
+        // con l'etichetta: "Piano: 3"; senza: solo "3" (vale quando il campo si stampa da solo)
+        SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
     }
 }
 
@@ -438,60 +307,6 @@ private fun CopyFromButton(sources: List<FieldSource>, onPick: (FieldSource) -> 
                 onClick = { open = false; onPick(src) },
             )
         }
-    }
-}
-
-@Composable
-private fun PositionPicker(pos: FieldPos, onPick: (FieldPos) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        AppButton(pos.short, { open = true }, Modifier.width(118.dp))
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (p in FieldPos.entries) DropdownMenuItem(text = { Text(p.label) }, onClick = { open = false; onPick(p) })
-        }
-    }
-}
-
-/**
- * Schema dello spazio per le note: striscia aggiunta sopra e sotto la foto, ciascuna divisa
- * in angolo sx (20%), banda centrale (60%) e angolo dx (20%), con dentro i nomi dei campi.
- */
-@Composable
-private fun LayoutPreview(fields: List<NoteField>) {
-    fun names(pos: FieldPos) = fields.filter { it.pos == pos && it.id !in grouped(fields) && (it.auto || it.label.isNotBlank()) }.map {
-        if (it.auto) it.label.trim().ifEmpty { it.kind.defaultLabel } + "*" else it.label.trim()
-    }
-    val grey = Color(0xFF777777)
-
-    @Composable
-    fun RowScope.cell(weight: Float, empty: String, items: List<String>, align: TextAlign) = Box(
-        Modifier.weight(weight).fillMaxHeight().border(0.5.dp, grey).padding(horizontal = 4.dp, vertical = 5.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            if (items.isEmpty()) empty else items.joinToString("\n"),
-            fontSize = 10.sp, lineHeight = 13.sp, textAlign = align, modifier = Modifier.fillMaxWidth(),
-            color = if (items.isEmpty()) grey else Color.White,
-        )
-    }
-
-    @Composable
-    fun strip(left: FieldPos, center: FieldPos, right: FieldPos, centerName: String, extra: List<String>) =
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(Color.Black)) {
-            cell(Strip.SIDE, "sx", names(left), TextAlign.Start)
-            cell(1f - 2 * Strip.SIDE, centerName, names(center) + extra, TextAlign.Center)
-            cell(Strip.SIDE, "dx", names(right), TextAlign.End)
-        }
-
-    Column(Modifier.fillMaxWidth()) {
-        Caption("↓ spazio aggiunto")
-        strip(FieldPos.TL, FieldPos.TOP, FieldPos.TR, "banda superiore", emptyList())
-        Box(Modifier.fillMaxWidth().height(100.dp).background(Color(0xFF8A8A8A)), contentAlignment = Alignment.Center) {
-            Text("FOTO\nrisoluzione nativa", fontSize = 12.sp, color = Color(0xFFE0E0E0), textAlign = TextAlign.Center)
-        }
-        // la nota libera sta sempre al centro della banda inferiore
-        strip(FieldPos.BL, FieldPos.BOTTOM, FieldPos.BR, "banda inferiore", listOf("Nota"))
-        Caption("↑ spazio aggiunto · angoli 20%, banda centrale 60%")
     }
 }
 

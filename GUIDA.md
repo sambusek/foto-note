@@ -58,7 +58,9 @@ Il testo e i campi finiscono in bianco su una fascia nera aggiunta sopra o sotto
 
 ## Layout delle note e template
 
-Il layout decide quali campi compaiono sulle foto e dove. Lo imposti per ogni sopralluogo da ⋮ › **Layout delle note…**; un template lo prepara una volta per tutti i sopralluoghi simili.
+Il layout decide quali campi si compilano e dove si stampano sulle foto. Lo imposti per ogni sopralluogo da ⋮ › **Layout delle note…**; un template lo prepara una volta per tutti i sopralluoghi simili. La schermata ha due pagine.
+
+**Campi: cosa si compila.** Per ogni campo scegli tipo e nome, le voci se è un elenco, e se stampare l'etichetta prima del valore. Le frecce danno l'ordine nel pannello dell'editor.
 
 | Tipo di campo | Cosa contiene | Esempio |
 | --- | --- | --- |
@@ -68,9 +70,11 @@ Il layout decide quali campi compaiono sulle foto e dove. Lo imposti per ogni so
 | Sopralluogo, Utente | Riempiti da soli con il nome del sopralluogo e il tuo | 261118 SAL |
 | Fisso | Stesso testo su tutte le foto | Committente |
 
-Ogni campo va in una fascia, sopra o sotto la foto, e in una posizione: sinistra, centro o destra. L'anteprima nel layout mostra dove cade. Per ogni campo puoi mostrare o nascondere l'etichetta prima del testo. Con le frecce su e giù accanto a ogni campo ne cambi l'ordine: è l'ordine in cui compaiono nell'editor e sulla fascia.
+**Layout: dove si stampa.** I campi sono etichette da mettere nelle sei caselle sopra e sotto la foto (sinistra, centro, destra). Tieni premuta un'etichetta e trascinala, oppure toccala e poi tocca la destinazione:
 
-**Campi concatenati.** Nel layout tocca **Concatena** in cima ai campi, spunta quelli da unire (es. Piano, Zona, Progressivo) e tocca **Fine**: nasce un gruppo, con i suoi campi appesi sotto. Sulla foto il gruppo stampa una sola riga, per esempio `3_Bagno_012`. Nel gruppo scegli nome, posizione e separatore; i campi si riordinano con le frecce, la × li toglie dal gruppo e il cestino del gruppo lo scioglie. I campi del gruppo si compilano sempre separati e restano disponibili, uno per uno, per i nomi dello ZIP e per l'ordinamento.
+- su una **casella**: il campo si stampa lì, una riga per etichetta;
+- su **un'altra etichetta**: le due si **concatenano** in una catena che stampa una riga sola, per esempio `3_Bagno_012`. Tocca il separatore fra due etichetta per cambiarlo, «modifica» per rinominare la catena (il nome serve nello ZIP) o scioglierla;
+- sul vassoio **Non stampati**: il campo si compila e vale per i nomi dello ZIP e per l'ordine delle foto, ma non va sulla foto.
 
 I template si gestiscono da Impostazioni › **Template di sopralluogo**. Si possono condividere e importare su un altro telefono; con **Copia i campi da…** riprendi i campi di un altro sopralluogo o template.
 

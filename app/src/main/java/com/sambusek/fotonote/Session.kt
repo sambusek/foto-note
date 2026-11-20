@@ -164,6 +164,7 @@ internal fun NoteField.toJson() = JSONObject()
     .put("id", id).put("label", label).put("pos", pos.name).put("showLabel", showLabel)
     .put("kind", kind.name).put("text", text).put("choices", choices)
     .put("parts", JSONArray(parts)).put("separator", separator)
+    .put("placed", placed).put("slot", slot)
 
 internal fun fieldFromJson(x: JSONObject): NoteField {
     val choices = x.optString("choices", "")
@@ -175,6 +176,8 @@ internal fun fieldFromJson(x: JSONObject): NoteField {
         x.optBoolean("showLabel", true), kind, x.optString("text", ""), choices,
         parts = x.optJSONArray("parts")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
         separator = x.optString("separator", "_"),
+        placed = x.optBoolean("placed", true),
+        slot = x.optInt("slot", 0),
     )
 }
 

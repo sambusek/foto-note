@@ -58,6 +58,10 @@ data class NoteField(
     /** Campi uniti da un [FieldKind.COMBINED], nell'ordine, e il separatore fra i valori. */
     val parts: List<String> = emptyList(),
     val separator: String = "_",
+    /** Falso: il campo non è nel layout (si compila ma non si stampa). */
+    val placed: Boolean = true,
+    /** Ordine nella casella del layout (una riga per elemento). */
+    val slot: Int = 0,
 ) {
     val auto: Boolean get() = kind.auto
     val options: List<String> get() = choices.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -162,8 +166,8 @@ class Overlay private constructor(private val top: Strip?, private val bottom: S
 
     companion object {
         private fun lines(pos: FieldPos, fields: List<NoteField>, values: Map<String, String>): List<String> =
-            // i campi uniti in un gruppo si stampano solo dentro il gruppo
-            fields.filter { it.pos == pos && it.id !in grouped(fields) }.mapNotNull { f ->
+            // i campi uniti in un gruppo si stampano solo dentro il gruppo; quelli fuori dal layout mai
+            fields.filter { it.pos == pos && it.placed && it.id !in grouped(fields) }.sortedBy { it.slot }.mapNotNull { f ->
                 values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     if (f.showLabel && f.label.isNotBlank()) "${f.label.trim()}: $it" else it
                 }
