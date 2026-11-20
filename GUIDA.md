@@ -32,6 +32,8 @@ Se scatti molte foto nello stesso punto, puoi far compilare da soli i campi dei 
 
 Sulla singola foto puoi sempre correggere o svuotare un valore precompilato.
 
+Per cambiare nome a un sopralluogo, anche in corso, usa ⋮ › **Rinomina…**: le prossime versioni e il consolidamento useranno la cartella con il nuovo nome, mentre le versioni già emesse restano nelle loro cartelle.
+
 ### Più cantieri nella stessa giornata
 
 Puoi tenere aperti più sopralluoghi, ma uno solo alla volta raccoglie le foto. Esempio: inizi nel cantiere A, poi vai nel cantiere B.
