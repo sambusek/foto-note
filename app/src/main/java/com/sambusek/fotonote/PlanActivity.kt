@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -308,8 +309,8 @@ private fun PlanCanvas(
                 drawCircle(if (sel) cs.primary else cs.primary.copy(alpha = 0.85f), rr, c)
                 if (key == unlocked) {
                     // sbloccato: anelli che si allargano e svaniscono
-                    drawCircle(cs.primary.copy(alpha = 0.6f * (1f - pulse)), rr + (6 + 18 * pulse).dp.toPx(), c, style = Stroke(3.dp.toPx()))
-                    drawCircle(cs.primary.copy(alpha = 0.25f * (1f - pulse)), rr + (18 * pulse).dp.toPx(), c)
+                    drawCircle(cs.primary.copy(alpha = 0.6f * (1f - pulse)), rr + (6f + 18f * pulse).dp.toPx(), c, style = Stroke(3.dp.toPx()))
+                    drawCircle(cs.primary.copy(alpha = 0.25f * (1f - pulse)), rr + (18f * pulse).dp.toPx(), c)
                 } else if (sel) drawCircle(cs.primary, rr + 6.dp.toPx(), c, style = Stroke(2.dp.toPx()))
                 drawIntoCanvas {
                     numberPaint.color = cs.onPrimary.toArgb()
