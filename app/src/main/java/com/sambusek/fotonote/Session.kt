@@ -328,12 +328,22 @@ object SessionStore {
     }
 
     /** [base] o, se già usato da un altro sopralluogo, [base]_2, _3… */
-    fun uniqueFolder(c: Context, base: String): String {
-        val used = all(c).map { it.folder }.toSet()
+    fun uniqueFolder(c: Context, base: String, exceptId: String? = null): String {
+        val used = all(c).filter { it.id != exceptId }.map { it.folder }.toSet()
         var folder = base
         var n = 2
         while (folder in used) folder = "${base}_${n++}"
         return folder
+    }
+
+    /**
+     * Rinomina un sopralluogo aperto: cambiano il nome e la cartella delle prossime versioni e del
+     * consolidamento (stessa data). Le versioni già emesse restano nelle loro cartelle.
+     */
+    fun rename(c: Context, s: Session, name: String): Session {
+        val n = name.trim().ifEmpty { return s }
+        val folder = if (s.open) uniqueFolder(c, folderName(s.start, n), s.id) else s.folder
+        return s.copy(name = n, folder = folder).also { save(c, it) }
     }
 
     /** Nuova sessione, con i campi di un template oppure senza campi. */

@@ -447,8 +447,9 @@ fun PromptDialog(
     confirm: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
+    initial: String = "",
 ) {
-    var text by remember { mutableStateOf("") }
+    var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(12.dp),

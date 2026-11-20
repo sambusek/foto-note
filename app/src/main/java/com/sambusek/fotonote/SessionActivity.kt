@@ -134,6 +134,22 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
     // campi che si possono precompilare per i nuovi scatti
     val presetFields = s.fields.filter { it.kind == FieldKind.INPUT || it.kind == FieldKind.CHOICE }
     var editPreset by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
+    if (renaming) PromptDialog(
+        title = "Rinomina il sopralluogo",
+        message = "Le prossime versioni e il consolidamento useranno la cartella con il nuovo nome" +
+            (if (s.versions.isNotEmpty()) "; le versioni già emesse restano dove sono." else "."),
+        placeholder = "Nome del sopralluogo",
+        confirm = "Rinomina",
+        initial = s.name,
+        onConfirm = { n ->
+            renaming = false
+            val r = SessionStore.rename(ctx, SessionStore.get(ctx, s.id) ?: s, n)
+            refresh()
+            Toast.makeText(ctx, "Cartella: ${r.folder}", Toast.LENGTH_SHORT).show()
+        },
+        onDismiss = { renaming = false },
+    )
     if (editPreset) PresetDialog(
         presetFields, s.currentPreset,
         onSave = { v ->
@@ -326,6 +342,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                     listOfNotNull(
                         if (s.versions.isNotEmpty()) "Versioni emesse (${s.versions.size})…" to { showReleases = true } else null,
                         if (presetFields.isNotEmpty()) "Precompila i campi…" to { editPreset = true } else null,
+                        "Rinomina…" to { renaming = true },
                         "Nota generale…" to { editNote = true },
                         "Aggiungi foto già scattate…" to { picking = true },
                         "Campi e layout…" to { layoutEdit = true },
