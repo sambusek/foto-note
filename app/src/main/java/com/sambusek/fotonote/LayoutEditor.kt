@@ -67,7 +67,7 @@ fun LayoutScreen(
     sources: List<FieldSource>,
     onDone: (List<NoteField>) -> Unit,
     onCancel: () -> Unit,
-    title: String = "Layout delle note",
+    title: String = "Campi e layout",
     onSaveAsTemplate: ((String, List<NoteField>) -> Unit)? = null,
 ) {
     val fields = remember { mutableStateListOf<NoteField>().apply { addAll(initial) } }
@@ -89,7 +89,7 @@ fun LayoutScreen(
     AppScreen(
         maxWidth = ReadableWidth,
         title = title,
-        subtitle = if (title != "Layout delle note") "Campi del template" else null,
+        subtitle = if (title != "Campi e layout") "Campi del template" else null,
         onBack = onCancel,
         actions = {
             if (onSaveAsTemplate != null) OverflowMenu(listOf("Salva come template…" to { askTemplate = true }))

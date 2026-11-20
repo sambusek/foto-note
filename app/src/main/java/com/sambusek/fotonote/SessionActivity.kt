@@ -328,7 +328,7 @@ private fun StagingScreen(s: Session, tick: MutableIntState, onClose: () -> Unit
                         if (presetFields.isNotEmpty()) "Precompila i campi…" to { editPreset = true } else null,
                         "Nota generale…" to { editNote = true },
                         "Aggiungi foto già scattate…" to { picking = true },
-                        "Layout delle note…" to { layoutEdit = true },
+                        "Campi e layout…" to { layoutEdit = true },
                         "Esporta per un altro telefono…" to {
                             SessionOps.exportPackage(ctx, s) { f ->
                                 if (f == null) Toast.makeText(ctx, "Non sono riuscito a creare il pacchetto", Toast.LENGTH_LONG).show()

@@ -56,9 +56,9 @@ Tocca una foto della griglia per aprirla nell'editor. Le modifiche si salvano qu
 
 Il testo e i campi finiscono in bianco su una fascia nera aggiunta sopra o sotto la foto: l'immagine originale non viene coperta né modificata.
 
-## Layout delle note e template
+## Campi, layout e template
 
-Il layout decide quali campi si compilano e dove si stampano sulle foto. Lo imposti per ogni sopralluogo da ⋮ › **Layout delle note…**; un template lo prepara una volta per tutti i sopralluoghi simili. La schermata ha due pagine.
+Il layout decide quali campi si compilano e dove si stampano sulle foto. Lo imposti per ogni sopralluogo da ⋮ › **Campi e layout…**; un template lo prepara una volta per tutti i sopralluoghi simili. La schermata ha due pagine.
 
 **Campi: cosa si compila.** Per ogni campo scegli tipo e nome, le voci se è un elenco, e se stampare l'etichetta prima del valore. Le frecce danno l'ordine nel pannello dell'editor.
 
