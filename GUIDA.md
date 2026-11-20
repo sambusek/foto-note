@@ -11,11 +11,22 @@ Pastashoot raccoglie le foto di un sopralluogo, le annota con pennino, dita e no
 
 Gli aggiornamenti si installano sopra la versione precedente, senza perdere nulla. Non disinstallare mai l'app: è l'unico modo per perdere sopralluoghi e annotazioni.
 
+## Cantieri e planimetrie
+
+Il **cantiere** raccoglie nel tempo i sopralluoghi dello stesso luogo, con le sue **planimetrie** e lo schema dei campi da cui partono i nuovi sopralluoghi. Dalla Home: **Cantieri e planimetrie**.
+
+- **Nuovo cantiere…**: nome ed eventuale template da cui prendere i campi.
+- **Carica planimetrie (PDF)…**: ogni pagina del PDF diventa una tavola, che puoi rinominare (es. «Piano 3»).
+- **Nuova revisione…** (toccando una tavola): carichi la versione aggiornata. Vale per i prossimi sopralluoghi; quelli chiusi restano sulla revisione che usavano. Un sopralluogo ancora aperto ti propone di passare alla nuova, con i pin nello stesso punto della pagina.
+- I sopralluoghi creati prima dei cantieri, e quelli veloci, stanno nel cantiere **Generico**.
+
+**Pin delle foto.** Nel sopralluogo apri ⋮ › **Planimetrie…**: scegli una foto nella striscia in basso e tocca la pianta nel punto in cui l'hai scattata; si passa da soli alla foto successiva senza pin. Con due dita ingrandisci e sposti la pianta. Toccando un pin scegli la sua foto, per spostarla, toglierla o aprirla. Dall'editor di una foto c'è anche ⋮ › **Posiziona sulla pianta…**.
+
 ## Fare un sopralluogo
 
 Un sopralluogo raccoglie da solo tutte le foto scattate con la fotocamera del telefono dal momento in cui lo inizi. Non serve scattare dall'app.
 
-1. Nella Home tocca **Inizia sopralluogo…**, scrivi il nome (diventerà il nome della cartella) e, se vuoi, scegli un template.
+1. Nella Home tocca **Inizia sopralluogo…**, scegli il cantiere (viene proposto l'ultimo usato) e scrivi il nome, che diventerà anche il nome della cartella. I campi arrivano dal cantiere.
 2. Scatta con la fotocamera di sempre, o dal pulsante **Fotocamera** nella schermata del sopralluogo. Le foto compaiono nella griglia.
 3. Se ti servono foto fatte prima, usa ⋮ › **Aggiungi foto già scattate…**.
 4. Tieni premuta una foto per due scelte: **Escludi dalle versioni** la lascia nel sopralluogo ma fuori da versioni e consolidamento; **Togli dal sopralluogo** la fa sparire dalla griglia, ma resta nella Galleria del telefono. Per riaverla usa **Aggiungi foto già scattate…**.
