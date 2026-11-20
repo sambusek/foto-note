@@ -73,7 +73,7 @@ Il layout decide quali campi si compilano e dove si stampano sulle foto. Lo impo
 **Layout: dove si stampa.** I campi sono etichette da mettere nelle sei caselle sopra e sotto la foto (sinistra, centro, destra). Tieni premuta un'etichetta e trascinala, oppure toccala e poi tocca la destinazione:
 
 - su una **casella**: il campo si stampa lì, una riga per etichetta;
-- su **un'altra etichetta**: le due si **concatenano** in una catena che stampa una riga sola, per esempio `3_Bagno_012`. Tocca il separatore fra due etichetta per cambiarlo, «modifica» per rinominare la catena (il nome serve nello ZIP) o scioglierla;
+- su **un'altra etichetta**: le due si **concatenano** in una catena che stampa una riga sola, per esempio `3_Bagno_012`. Tocca il separatore fra due etichette per cambiarlo, «modifica» per rinominare la catena (il nome serve nello ZIP) o scioglierla;
 - sul vassoio **Non stampati**: il campo si compila e vale per i nomi dello ZIP e per l'ordine delle foto, ma non va sulla foto.
 
 I template si gestiscono da Impostazioni › **Template di sopralluogo**. Si possono condividere e importare su un altro telefono; con **Copia i campi da…** riprendi i campi di un altro sopralluogo o template.

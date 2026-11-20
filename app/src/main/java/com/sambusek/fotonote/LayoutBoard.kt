@@ -159,7 +159,12 @@ fun LayoutBoard(fields: SnapshotStateList<NoteField>) {
     /** Azione su una destinazione: "pill:<id>", "cell:<POS>" oppure "tray". */
     fun act(id: String, target: String) {
         when {
-            target.startsWith("pill:") -> apply(LayoutOps.join(fields, id, target.removePrefix("pill:")))
+            target.startsWith("pill:") -> {
+                val t = target.removePrefix("pill:")
+                // un'etichetta del vassoio non si concatena: lasciarci sopra vuol dire "non stampare"
+                val inTray = byId(t)?.let { !it.placed && it.id !in grouped(fields) } == true
+                apply(if (inTray) LayoutOps.unplace(fields, id) else LayoutOps.join(fields, id, t))
+            }
             target.startsWith("cell:") -> apply(LayoutOps.moveTo(fields, id, FieldPos.valueOf(target.removePrefix("cell:"))))
             target == "tray" -> apply(LayoutOps.unplace(fields, id))
         }
