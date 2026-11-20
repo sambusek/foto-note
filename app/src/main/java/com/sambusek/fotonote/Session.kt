@@ -166,6 +166,19 @@ internal fun NoteField.toJson() = JSONObject()
     .put("parts", JSONArray(parts)).put("separator", separator)
     .put("placed", placed).put("slot", slot)
 
+/**
+ * Layout delle versioni precedenti, con gli angoli: sinistra, centro e destra finiscono
+ * in fila nella banda dello stesso lato, nello stesso ordine.
+ */
+internal fun migrateLayout(fields: List<NoteField>): List<NoteField> {
+    if (fields.none { it.pos != it.pos.band }) return fields
+    val cells = fields.groupBy { it.pos }.mapValues { (_, l) -> l.sortedBy { it.slot } }
+    return fields.map { f ->
+        val cell = when (f.pos) { FieldPos.TL, FieldPos.BL -> 0; FieldPos.TOP, FieldPos.BOTTOM -> 1; else -> 2 }
+        f.copy(pos = f.pos.band, slot = cell * 1000 + cells.getValue(f.pos).indexOf(f))
+    }
+}
+
 internal fun fieldFromJson(x: JSONObject): NoteField {
     val choices = x.optString("choices", "")
     var kind = FieldKind.entries.firstOrNull { it.name == x.optString("kind") } ?: FieldKind.INPUT
@@ -222,7 +235,7 @@ internal fun sessionFromJson(o: JSONObject): Session {
         excluded = o.optJSONArray("excluded").strings().toSet(),
         extra = o.optJSONArray("extra").strings(),
         removed = o.optJSONArray("removed").strings().toSet(),
-        fields = if (fl == null) emptyList() else (0 until fl.length()).map { fieldFromJson(fl.getJSONObject(it)) },
+        fields = if (fl == null) emptyList() else migrateLayout((0 until fl.length()).map { fieldFromJson(fl.getJSONObject(it)) }),
         items = itemsFromJson(o.optJSONArray("items")),
         versions = if (vs == null) emptyList() else (0 until vs.length()).map {
             val x = vs.getJSONObject(it)

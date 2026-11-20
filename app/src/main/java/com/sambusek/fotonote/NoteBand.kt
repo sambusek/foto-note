@@ -8,14 +8,20 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 
-/** Dove può comparire un campo di testo: una delle sei caselle delle due strisce aggiunte. */
+/**
+ * Dove si stampa un campo: banda superiore o inferiore. Gli angoli vengono dalle versioni
+ * precedenti e si leggono come la banda dello stesso lato.
+ */
 enum class FieldPos(val label: String, val short: String) {
     TOP("Banda superiore", "Banda sup."),
     BOTTOM("Banda inferiore", "Banda inf."),
     TL("Angolo superiore sinistro", "Ang. sup. sx"),
     TR("Angolo superiore destro", "Ang. sup. dx"),
     BL("Angolo inferiore sinistro", "Ang. inf. sx"),
-    BR("Angolo inferiore destro", "Ang. inf. dx"),
+    BR("Angolo inferiore destro", "Ang. inf. dx");
+
+    /** La banda a cui appartiene la posizione. */
+    val band: FieldPos get() = if (this == TOP || this == TL || this == TR) TOP else BOTTOM
 }
 
 /** Tipo di campo: da compilare foto per foto (testo libero o elenco) oppure automatico. */
@@ -27,11 +33,11 @@ enum class FieldKind(
 ) {
     INPUT("Testo libero", "Lo scrivi tu, foto per foto", "", FieldPos.BOTTOM),
     CHOICE("Elenco di scelte", "Su ogni foto scegli una voce dall'elenco che definisci qui", "", FieldPos.BOTTOM),
-    DATE("Data dello scatto", "Automatico: la data della foto", "Data", FieldPos.TL),
-    TIME("Ora dello scatto", "Automatico: l'ora della foto", "Ora", FieldPos.TL),
+    DATE("Data dello scatto", "Automatico: la data della foto", "Data", FieldPos.TOP),
+    TIME("Ora dello scatto", "Automatico: l'ora della foto", "Ora", FieldPos.TOP),
     SESSION("Nome del sopralluogo", "Automatico: il nome di questa sessione", "Sopralluogo", FieldPos.TOP),
-    USER("Nome utente", "Automatico: il tuo nome, impostato nell'app", "Redatto da", FieldPos.BR),
-    FIXED("Etichetta fissa", "Automatico: lo stesso testo su tutte le foto", "Etichetta", FieldPos.TR),
+    USER("Nome utente", "Automatico: il tuo nome, impostato nell'app", "Redatto da", FieldPos.BOTTOM),
+    FIXED("Etichetta fissa", "Automatico: lo stesso testo su tutte le foto", "Etichetta", FieldPos.TOP),
     COMBINED(
         "Gruppo concatenato", "Unisce i campi scelti in una sola riga, es. 3_Bagno_012",
         "Codice", FieldPos.BOTTOM,
@@ -115,10 +121,13 @@ class Strip private constructor(
     }
 
     companion object {
+        /** Striscia a tutta larghezza, testo allineato a sinistra; null se non c'è testo. */
+        fun band(text: String, imageWidth: Int, imageHeight: Int): Strip? = create(text, "", "", imageWidth, imageHeight, full = true)
+
         const val SIDE = 0.20f // larghezza di ciascun angolo; il centro ha il resto
         private val BG = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL }
 
-        fun create(left: String, center: String, right: String, imageWidth: Int, imageHeight: Int): Strip? {
+        fun create(left: String, center: String, right: String, imageWidth: Int, imageHeight: Int, full: Boolean = false): Strip? {
             if (imageWidth <= 0 || (left.isBlank() && center.isBlank() && right.isBlank())) return null
             val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
@@ -128,7 +137,7 @@ class Strip private constructor(
             val pad = paint.textSize * 0.6f
             val side = imageWidth * SIDE
             val mid = imageWidth - 2 * side
-            val specs = listOf(
+            val specs = if (full) listOf(Triple(left.trim(), 0f to imageWidth.toFloat(), Layout.Alignment.ALIGN_NORMAL)) else listOf(
                 Triple(left.trim(), 0f to side, Layout.Alignment.ALIGN_NORMAL),
                 Triple(center.trim(), side to mid, Layout.Alignment.ALIGN_CENTER),
                 Triple(right.trim(), side + mid to side, Layout.Alignment.ALIGN_OPPOSITE),
@@ -165,30 +174,31 @@ class Overlay private constructor(private val top: Strip?, private val bottom: S
     }
 
     companion object {
-        private fun lines(pos: FieldPos, fields: List<NoteField>, values: Map<String, String>): List<String> =
-            // i campi uniti in un gruppo si stampano solo dentro il gruppo; quelli fuori dal layout mai
-            fields.filter { it.pos == pos && it.placed && it.id !in grouped(fields) }.sortedBy { it.slot }.mapNotNull { f ->
-                values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                    if (f.showLabel && f.label.isNotBlank()) "${f.label.trim()}: $it" else it
+        private fun lines(band: FieldPos, fields: List<NoteField>, values: Map<String, String>): List<String> =
+            // i campi uniti in una catena si stampano solo dentro la catena; quelli fuori dal layout mai
+            fields.filter { it.pos.band == band && it.placed && it.id !in grouped(fields) }
+                .sortedWith(compareBy({ it.pos.ordinal }, { it.slot }))
+                .mapNotNull { f ->
+                    values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                        if (f.showLabel && f.label.isNotBlank()) "${f.label.trim()}: $it" else it
+                    }
                 }
-            }
 
         fun create(
             note: String, fields: List<NoteField>, values: Map<String, String>,
             imageWidth: Int, imageHeight: Int,
         ): Overlay {
-            fun text(pos: FieldPos) = lines(pos, fields, values).joinToString("\n")
-            val bottomCenter = (lines(FieldPos.BOTTOM, fields, values) +
-                listOfNotNull(note.trim().takeIf { it.isNotEmpty() })).joinToString("\n")
-            return Overlay(
-                Strip.create(text(FieldPos.TL), text(FieldPos.TOP), text(FieldPos.TR), imageWidth, imageHeight),
-                Strip.create(text(FieldPos.BL), bottomCenter, text(FieldPos.BR), imageWidth, imageHeight),
-            )
+            val top = lines(FieldPos.TOP, fields, values).joinToString(SEP)
+            val bottom = listOf(lines(FieldPos.BOTTOM, fields, values).joinToString(SEP), note.trim())
+                .filter { it.isNotEmpty() }.joinToString("\n")
+            return Overlay(Strip.band(top, imageWidth, imageHeight), Strip.band(bottom, imageWidth, imageHeight))
         }
+
+        private const val SEP = "   ·   "
 
         /** Tutti i testi in una riga sola (per i metadati); vuoto se non c'è nulla. */
         fun describe(note: String, fields: List<NoteField>, values: Map<String, String>): String =
-            (FieldPos.entries.flatMap { lines(it, fields, values) } +
+            (listOf(FieldPos.TOP, FieldPos.BOTTOM).flatMap { lines(it, fields, values) } +
                 listOfNotNull(note.trim().takeIf { it.isNotEmpty() })).joinToString("; ")
     }
 }

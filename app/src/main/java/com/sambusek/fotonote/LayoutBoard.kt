@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -93,6 +92,22 @@ object LayoutOps {
             val i = order.indexOf(f.id)
             if (i >= 0) f.copy(placed = true, pos = c.pos, slot = i) else f
         }
+    }
+
+    /** Sposta un elemento di un posto nella sua banda, o un campo di un posto nella sua catena. */
+    fun shift(fs: List<NoteField>, id: String, d: Int): List<NoteField> {
+        chainOf(fs, id)?.let { c ->
+            val i = c.parts.indexOf(id); val j = i + d
+            if (j !in c.parts.indices) return fs
+            return update(fs, c.id) { it.copy(parts = it.parts.toMutableList().apply { add(j, removeAt(i)) }) }
+        }
+        val f = fs.firstOrNull { it.id == id } ?: return fs
+        val band = fs.filter { it.placed && it.pos == f.pos && it.id !in grouped(fs) }.sortedBy { it.slot }.toMutableList()
+        val i = band.indexOfFirst { it.id == id }; val j = i + d
+        if (i < 0 || j !in band.indices) return fs
+        band.add(j, band.removeAt(i))
+        val slots = band.withIndex().associate { it.value.id to it.index }
+        return fs.map { x -> slots[x.id]?.let { x.copy(slot = it) } ?: x }
     }
 
     /** Toglie dal layout: il campo resta da compilare. Una catena si scioglie e i suoi campi escono. */
@@ -224,87 +239,82 @@ fun LayoutBoard(fields: SnapshotStateList<NoteField>) {
     @Composable
     fun Item(f: NoteField) {
         if (f.kind != FieldKind.COMBINED) return Pill(f.id, name(f), f.auto)
-        // catena: maniglia col nome, poi i campi con il separatore fra l'uno e l'altro
+        // catena: maniglia col nome, i campi con il separatore fra l'uno e l'altro, le impostazioni
         val members = f.parts.mapNotNull { byId(it) }
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).border(1.dp, cs.primary, RoundedCornerShape(10.dp)).padding(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        FlowRow(
+            Modifier.clip(RoundedCornerShape(18.dp)).border(1.5.dp, cs.primary, RoundedCornerShape(18.dp)).padding(3.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Pill(f.id, name(f), auto = false, chainHandle = true)
-                Spacer(Modifier.weight(1f))
+            Pill(f.id, name(f), auto = false, chainHandle = true)
+            members.forEachIndexed { i, m ->
                 Text(
-                    "modifica", style = MaterialTheme.typography.labelSmall, color = cs.primary,
-                    modifier = Modifier.clickable { editChain = f.id }.padding(4.dp),
-                )
-            }
-            FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                members.forEachIndexed { i, m ->
-                    if (i > 0) Text(
-                        // tocco sul separatore: si passa al successivo
-                        if (f.separator == " ") "␣" else f.separator,
-                        style = MaterialTheme.typography.titleMedium, color = cs.primary,
-                        modifier = Modifier.align(Alignment.CenterVertically).clickable {
+                    // tocco sul separatore: si passa al successivo
+                    if (i == 0) ":" else if (f.separator == " ") "␣" else f.separator,
+                    style = MaterialTheme.typography.titleMedium, color = Color.White,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                        .clickable(enabled = i > 0) {
                             val next = SEPARATORS[(SEPARATORS.indexOf(f.separator) + 1) % SEPARATORS.size]
                             apply(fields.map { if (it.id == f.id) it.copy(separator = next) else it })
-                        }.padding(horizontal = 6.dp),
-                    )
-                    Pill(m.id, name(m), m.auto)
-                }
+                        }
+                        .padding(horizontal = 5.dp),
+                )
+                Pill(m.id, name(m), m.auto)
             }
+            ToolIcon(AppIcons.Tune, "Impostazioni della catena", { editChain = f.id }, modifier = Modifier.align(Alignment.CenterVertically))
         }
     }
 
     @Composable
-    fun RowScope.Cell(pos: FieldPos, hint: String, extra: String? = null) {
-        val items = fields.filter { it.placed && it.pos == pos && it.id !in inChains && (it.auto || it.label.isNotBlank() || it.kind == FieldKind.COMBINED) }
-            .sortedBy { it.slot }
+    fun Band(pos: FieldPos, title: String, extra: String? = null) {
+        val items = fields.filter { it.placed && it.pos.band == pos && it.id !in inChains && (it.auto || it.label.isNotBlank() || it.kind == FieldKind.COMBINED) }
+            .sortedWith(compareBy({ it.pos.ordinal }, { it.slot }))
         val tap by rememberUpdatedState { selected?.let { act(it, "cell:${pos.name}") } }
+        val active = selected != null || drag != null
         Column(
             Modifier
-                .weight(1f)
-                .heightIn(min = 72.dp)
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
                 .onGloballyPositioned { bounds["cell:${pos.name}"] = it.boundsInRoot() }
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF2B2B2B))
-                .border(if (selected != null || drag != null) 2.dp else 1.dp,
-                    if (selected != null || drag != null) cs.primary else Color(0xFF555555), RoundedCornerShape(8.dp))
+                .border(if (active) 2.dp else 1.dp, if (active) cs.primary else Color(0xFF555555), RoundedCornerShape(8.dp))
                 .clickable(enabled = selected != null) { tap() }
-                .padding(5.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(hint, style = MaterialTheme.typography.labelSmall, color = Color(0xFFAAAAAA))
-            for (f in items) Item(f)
+            Text(title, style = MaterialTheme.typography.labelSmall, color = Color(0xFFAAAAAA))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (f in items) Item(f)
+                if (items.isEmpty()) Text("vuota", style = MaterialTheme.typography.labelMedium, color = Color(0xFF888888))
+            }
             extra?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Color(0xFFCCCCCC)) }
         }
     }
 
     Box(Modifier.fillMaxWidth().onGloballyPositioned { origin = it.positionInRoot() }) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Caption(
-                selected?.let { s ->
-                    "«${byId(s)?.let { name(it) }}» scelto: tocca una casella per spostarlo, un'altra etichetta " +
-                        "per concatenarli, il vassoio per non stamparlo. Toccalo di nuovo per annullare."
-                } ?: "Tieni premuta un'etichetta e trascinala, oppure toccala e poi tocca dove va. " +
+            val sel = selected?.let { byId(it) }
+            if (sel != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Caption(
+                    "«${name(sel)}»: tocca una banda per spostarlo, un'altra etichetta per concatenarli, " +
+                        "il vassoio per non stamparlo.",
+                    Modifier.weight(1f),
+                )
+                // ordine nella banda (o nella catena)
+                ToolIcon(AppIcons.Prev, "Prima", { apply(LayoutOps.shift(fields, sel.id, -1)) })
+                ToolIcon(AppIcons.Next, "Dopo", { apply(LayoutOps.shift(fields, sel.id, 1)) })
+                ToolIcon(AppIcons.Close, "Annulla", { selected = null })
+            } else Caption(
+                "Tieni premuta un'etichetta e trascinala, oppure toccala e poi tocca dove va. " +
                     "Lasciata su un'altra etichetta, la concatena."
             )
-            Caption("Sopra la foto")
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Cell(FieldPos.TL, "sinistra")
-                Cell(FieldPos.TOP, "centro")
-                Cell(FieldPos.TR, "destra")
-            }
+            Band(FieldPos.TOP, "Banda superiore")
             Box(
                 Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF8A8A8A)),
                 contentAlignment = Alignment.Center,
             ) { Text("FOTO", color = Color(0xFFE6E6E6), style = MaterialTheme.typography.labelLarge) }
-            Caption("Sotto la foto")
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Cell(FieldPos.BL, "sinistra")
-                Cell(FieldPos.BOTTOM, "centro", extra = "+ nota della foto")
-                Cell(FieldPos.BR, "destra")
-            }
-            Caption("Ogni etichetta è una riga; sulla foto le caselle laterali occupano il 20% della larghezza, quella centrale il 60%.")
+            Band(FieldPos.BOTTOM, "Banda inferiore", extra = "+ nota della foto, a capo")
+            Caption("Sulla foto le etichette di una banda si stampano in fila, separate da un punto.")
 
             // vassoio: campi che si compilano ma non si stampano
             val tray = fields.filter { !it.placed && it.id !in inChains && it.kind != FieldKind.COMBINED && (it.auto || it.label.isNotBlank()) }

@@ -59,7 +59,7 @@ object TemplateStore {
         return Template(
             o.optString("id").ifBlank { System.currentTimeMillis().toString() },
             o.getString("name"),
-            (0 until fl.length()).map { fieldFromJson(fl.getJSONObject(it)) },
+            migrateLayout((0 until fl.length()).map { fieldFromJson(fl.getJSONObject(it)) }),
         )
     }
 
