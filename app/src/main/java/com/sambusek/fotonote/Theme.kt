@@ -1,5 +1,7 @@
 package com.sambusek.fotonote
 
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import android.app.Activity
 import android.content.Context
 import android.os.Build
@@ -45,6 +47,7 @@ val ACCENTS: List<Pair<String, Color?>> = listOf(
     "Arancio" to Color(0xFFD9661F),
     "Rosso" to Color(0xFFC62828),
     "Grafite" to Color(0xFF5F6B76),
+    "Lime" to Color(0xFF9DBF2E),
 )
 
 val dynamicColorAvailable = Build.VERSION.SDK_INT >= 31
@@ -121,13 +124,13 @@ private val CompactShapes = Shapes(
     extraLarge = RoundedCornerShape(12.dp),
 )
 
-/** Stile Griglia: nero, linee sottili grigie, accento lime. */
-private val GridScheme = darkColorScheme().copy(
-    primary = Color(0xFFC8E65A), onPrimary = Color.Black,
-    primaryContainer = Color(0xFF2A3312), onPrimaryContainer = Color(0xFFE2F5A8),
+/** Stile Griglia: nero, linee sottili grigie, accento scelto dalla tavolozza (più acceso, per lo sfondo nero). */
+private fun gridScheme(accent: Color): ColorScheme = darkColorScheme().copy(
+    primary = accent, onPrimary = if (accent.luminance() > 0.4f) Color.Black else Color.White,
+    primaryContainer = accent.copy(alpha = 0.22f).compositeOver(Color.Black), onPrimaryContainer = Color.White,
     secondary = Color(0xFF9A9A9A), onSecondary = Color.Black,
     secondaryContainer = Color(0xFF1C1C1C), onSecondaryContainer = Color(0xFFE6E6E6),
-    tertiary = Color(0xFFC8E65A), onTertiary = Color.Black,
+    tertiary = accent, onTertiary = Color.Black,
     background = Color.Black, onBackground = Color.White,
     surface = Color.Black, onSurface = Color.White,
     surfaceVariant = Color(0xFF141414), onSurfaceVariant = Color(0xFF8C8C8C),
@@ -156,7 +159,11 @@ fun AppTheme(content: @Composable () -> Unit) {
     }
     val seed = ACCENTS[ThemeStore.accent].second
     val scheme = when {
-        grid -> GridScheme
+        // Griglia: l'accento scelto, schiarito per lo sfondo nero; "Sistema" usa il colore di Android
+        grid -> gridScheme(
+            seed?.let { tone(it, 0.66f, 1.15f) }
+                ?: if (dynamicColorAvailable) dynamicDarkColorScheme(ctx).primary else Color(0xFF7FA2F0)
+        )
         seed != null -> accentScheme(seed, dark)
         dynamicColorAvailable -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
         else -> if (dark) darkColorScheme() else lightColorScheme()

@@ -550,7 +550,7 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                if (ThemeStore.skin == Skin.GRID) Caption("Lo stile Griglia è piatto e compatto, sempre scuro e con l'accento lime.")
+                if (ThemeStore.skin == Skin.GRID) Caption("Lo stile Griglia è piatto, compatto e sempre scuro.")
                 else SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     ThemeMode.entries.forEachIndexed { i, m ->
                         SegmentedButton(
@@ -560,12 +560,10 @@ private fun SettingsScreen(tick: MutableIntState, onNameChange: (String) -> Unit
                         ) { Text(m.label) }
                     }
                 }
-                if (ThemeStore.skin != Skin.GRID) {
-                    Spacer(Modifier.height(12.dp))
-                    Caption("Colore d'accento: ${ACCENTS[ThemeStore.accent].first}")
-                    Spacer(Modifier.height(8.dp))
-                    AccentPicker()
-                }
+                Spacer(Modifier.height(12.dp))
+                Caption("Colore d'accento: ${ACCENTS[ThemeStore.accent].first}")
+                Spacer(Modifier.height(8.dp))
+                AccentPicker()
             }
 
             Section("Dopo lo scatto") {
