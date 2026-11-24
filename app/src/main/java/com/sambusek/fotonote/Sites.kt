@@ -12,7 +12,11 @@ import org.json.JSONObject
 import java.io.File
 
 /** Una revisione di una tavola: una pagina di un PDF caricato in una certa data. */
-data class PlanRev(val id: String, val file: String, val page: Int, val time: Long, val source: String)
+data class PlanRev(
+    val id: String, val file: String, val page: Int, val time: Long, val source: String,
+    /** La pagina ha annotazioni da disegnare (null = non ancora verificato, revisioni precedenti). */
+    val annots: Boolean? = null,
+)
 
 /** Una tavola (planimetria) del cantiere; l'ultima revisione è quella attuale. */
 data class Plan(val id: String, val name: String, val revisions: List<PlanRev>) {
@@ -63,7 +67,8 @@ object SiteStore {
             plans.forEach { p ->
                 a.put(JSONObject().put("id", p.id).put("name", p.name).put("revisions", JSONArray().also { r ->
                     p.revisions.forEach { v ->
-                        r.put(JSONObject().put("id", v.id).put("file", v.file).put("page", v.page).put("time", v.time).put("source", v.source))
+                        r.put(JSONObject().put("id", v.id).put("file", v.file).put("page", v.page).put("time", v.time).put("source", v.source)
+                            .apply { v.annots?.let { put("annots", it) } })
                     }
                 }))
             }
@@ -80,7 +85,10 @@ object SiteStore {
                 val rv = p.getJSONArray("revisions")
                 Plan(p.getString("id"), p.getString("name"), (0 until rv.length()).map { j ->
                     val v = rv.getJSONObject(j)
-                    PlanRev(v.getString("id"), v.getString("file"), v.optInt("page"), v.optLong("time"), v.optString("source"))
+                    PlanRev(
+                        v.getString("id"), v.getString("file"), v.optInt("page"), v.optLong("time"), v.optString("source"),
+                        if (v.has("annots")) v.getBoolean("annots") else null,
+                    )
                 })
             }.filter { it.revisions.isNotEmpty() },
             o.optLong("created", System.currentTimeMillis()),
@@ -142,10 +150,11 @@ object SiteStore {
         val (file, pages) = copyPdf(c, siteId, uri)
         val base = source.substringBeforeLast('.')
         val now = System.currentTimeMillis()
+        val annots = PlanRender.annotatedPages(c, File(planDir(c, siteId), file))
         val added = (0 until pages).map { p ->
             Plan(
                 "${now}_$p", if (pages == 1) base else "$base · p. ${p + 1}",
-                listOf(PlanRev("${now}_${p}_r", file, p, now, source)),
+                listOf(PlanRev("${now}_${p}_r", file, p, now, source, p in annots)),
             )
         }
         return site.copy(plans = site.plans + added).also { save(c, it) }
@@ -157,7 +166,8 @@ object SiteStore {
         val source = MediaHelper.displayName(c.contentResolver, uri) ?: "planimetria.pdf"
         val (file, pages) = copyPdf(c, siteId, uri)
         val now = System.currentTimeMillis()
-        val rev = PlanRev("${now}_r", file, page.coerceIn(0, pages - 1), now, source)
+        val pg = page.coerceIn(0, pages - 1)
+        val rev = PlanRev("${now}_r", file, pg, now, source, pg in PlanRender.annotatedPages(c, File(planDir(c, siteId), file)))
         return site.copy(plans = site.plans.map { if (it.id == planId) it.copy(revisions = it.revisions + rev) else it })
             .also { save(c, it) }
     }
@@ -184,12 +194,46 @@ object PlanRender {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
 
+    /** Annotazioni che non si vedono sulla pianta (collegamenti, finestre delle note). */
+    private val INVISIBLE = setOf("Link", "Popup")
+
+    /**
+     * Pagine con annotazioni visibili (disegni a mano libera, forme, testi, evidenziazioni, timbri):
+     * il lettore di Android non le disegna, quindi quelle pagine passano dal motore completo.
+     */
+    fun annotatedPages(c: Context, f: File): Set<Int> = runCatching {
+        com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(c.applicationContext)
+        com.tom_roush.pdfbox.pdmodel.PDDocument.load(f).use { doc ->
+            (0 until doc.numberOfPages).filter { i ->
+                doc.getPage(i).annotations.any { it.subtype !in INVISIBLE && !it.isHidden && !it.isNoView }
+            }.toSet()
+        }
+    }.getOrDefault(emptySet())
+
+    /** Motore completo (con le annotazioni): più lento, usato solo per le pagine che ne hanno. */
+    private fun renderFull(c: Context, f: File, page: Int, longSide: Int): Bitmap {
+        com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(c.applicationContext)
+        return com.tom_roush.pdfbox.pdmodel.PDDocument.load(f).use { doc ->
+            val p = doc.getPage(page.coerceIn(0, doc.numberOfPages - 1))
+            val box = p.cropBox
+            val rotated = p.rotation % 180 != 0
+            val w = if (rotated) box.height else box.width
+            val h = if (rotated) box.width else box.height
+            val scale = longSide / maxOf(w, h)
+            com.tom_roush.pdfbox.rendering.PDFRenderer(doc)
+                .renderImage(doc.pages.indexOf(p), scale, com.tom_roush.pdfbox.rendering.ImageType.RGB)
+        }
+    }
+
     /** Immagine della pagina, lato lungo [longSide] pixel, su fondo bianco. Da chiamare fuori dal thread principale. */
     @Synchronized
     fun bitmap(c: Context, siteId: String, rev: PlanRev, longSide: Int = 2400): Bitmap {
         val key = "${rev.id}@$longSide"
         cache.get(key)?.let { return it }
         val f = SiteStore.planFile(c, siteId, rev)
+        // revisioni caricate prima di questa verifica: si controlla ora
+        val annots = rev.annots ?: (rev.page in annotatedPages(c, f))
+        if (annots) runCatching { renderFull(c, f, rev.page, longSide) }.getOrNull()?.let { cache.put(key, it); return it }
         val bmp = ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
             PdfRenderer(pfd).use { r ->
                 r.openPage(rev.page.coerceIn(0, r.pageCount - 1)).use { page ->
