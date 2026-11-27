@@ -186,6 +186,7 @@ private fun FieldEditor(
         }
         // con l'etichetta: "Piano: 3"; senza: solo "3" (vale quando il campo si stampa da solo)
         SwitchRow("Mostra l'etichetta prima del testo", f.showLabel, { onChange(f.copy(showLabel = !f.showLabel)) })
+        SwitchRow("In risalto: più grande, grassetto, giallo", f.highlight, { onChange(f.copy(highlight = !f.highlight)) })
     }
 }
 

@@ -113,6 +113,7 @@ object LayoutOps {
     /** Crea o aggiorna una catena; i campi tolti tornano da soli in fondo alla banda della catena. */
     fun saveChain(
         fs: List<NoteField>, chainId: String?, name: String, parts: List<String>, separator: String, band: FieldPos,
+        highlight: Boolean = false,
     ): List<NoteField> {
         val old = chainId?.let { id -> fs.firstOrNull { it.id == id } }
         var l = fs
@@ -122,13 +123,14 @@ object LayoutOps {
             val chain = NoteField(
                 System.nanoTime().toString(), name.trim().ifEmpty { "Codice" }, band, showLabel = false,
                 kind = FieldKind.COMBINED, parts = parts, separator = separator, placed = true, slot = nextSlot(l, band),
+                highlight = highlight,
             )
             l = l + chain
         } else {
             val moved = old.pos != band
             l = update(l, old.id) {
                 it.copy(label = name.trim().ifEmpty { "Codice" }, parts = parts, separator = separator, pos = band,
-                    placed = true, slot = if (moved) nextSlot(l, band) else it.slot)
+                    placed = true, slot = if (moved) nextSlot(l, band) else it.slot, highlight = highlight)
             }
             var next = nextSlot(l, band)
             for (gone in old.parts - parts.toSet()) l = update(l, gone) { it.copy(placed = true, pos = band, slot = next++) }
@@ -171,6 +173,7 @@ fun LayoutBoard(fields: SnapshotStateList<NoteField>) {
                     .widthIn(max = 260.dp)
                     .clip(RoundedCornerShape(50))
                     .background(if (chain) cs.primary else if (f.auto) cs.secondaryContainer else cs.primaryContainer)
+                    .then(if (f.highlight) Modifier.border(2.dp, Color(0xFFFFB81C), RoundedCornerShape(50)) else Modifier)
                     .clickable { menu = true }
                     .padding(horizontal = 12.dp, vertical = 7.dp),
             )
@@ -257,7 +260,7 @@ fun LayoutBoard(fields: SnapshotStateList<NoteField>) {
         }
         ChainDialog(
             chain, candidates, ::name,
-            onSave = { label, parts, sep, band -> apply(LayoutOps.saveChain(fields, chain?.id, label, parts, sep, band)); chainEdit = null },
+            onSave = { label, parts, sep, band, hl -> apply(LayoutOps.saveChain(fields, chain?.id, label, parts, sep, band, hl)); chainEdit = null },
             onDissolve = chain?.let { c -> { apply(LayoutOps.dissolve(fields, c.id)); chainEdit = null } },
             onDismiss = { chainEdit = null },
         )
@@ -271,7 +274,7 @@ private fun ChainDialog(
     chain: NoteField?,
     candidates: List<NoteField>,
     name: (NoteField) -> String,
-    onSave: (label: String, parts: List<String>, separator: String, band: FieldPos) -> Unit,
+    onSave: (label: String, parts: List<String>, separator: String, band: FieldPos, highlight: Boolean) -> Unit,
     onDissolve: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
@@ -279,6 +282,7 @@ private fun ChainDialog(
     var label by remember { mutableStateOf(chain?.label ?: "Codice") }
     var sep by remember { mutableStateOf(chain?.separator ?: "_") }
     var band by remember { mutableStateOf(chain?.pos?.band ?: FieldPos.BOTTOM) }
+    var highlight by remember { mutableStateOf(chain?.highlight ?: false) }
     val order = remember { mutableStateListOf<String>().apply { addAll(chain?.parts.orEmpty()) } }
     fun f(id: String) = candidates.firstOrNull { it.id == id }
 
@@ -319,6 +323,7 @@ private fun ChainDialog(
                     FilterChip(selected = band == FieldPos.BOTTOM, onClick = { band = FieldPos.BOTTOM }, label = { Text("Inferiore") })
                 }
                 CompactField(label, { label = it }, "Nome della catena (per lo ZIP), es. Codice")
+                SwitchRow("In risalto: più grande, grassetto, giallo", highlight, { highlight = !highlight })
                 if (order.size >= 2) Text(
                     "Sulla foto: " + order.mapNotNull { f(it) }.joinToString(sep) { name(it) },
                     style = MaterialTheme.typography.bodyMedium, color = cs.primary,
@@ -326,7 +331,7 @@ private fun ChainDialog(
             }
         },
         confirmButton = {
-            TextButton({ onSave(label, order.toList(), sep, band) }, enabled = order.size >= 2) { Text("Salva") }
+            TextButton({ onSave(label, order.toList(), sep, band, highlight) }, enabled = order.size >= 2) { Text("Salva") }
         },
         dismissButton = {
             Row {

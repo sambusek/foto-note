@@ -68,6 +68,8 @@ data class NoteField(
     val placed: Boolean = true,
     /** Ordine nella casella del layout (una riga per elemento). */
     val slot: Int = 0,
+    /** In risalto sulla foto: più grande, in grassetto, giallo tuorlo. */
+    val highlight: Boolean = false,
 ) {
     val auto: Boolean get() = kind.auto
     val options: List<String> get() = choices.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -122,12 +124,12 @@ class Strip private constructor(
 
     companion object {
         /** Striscia a tutta larghezza, testo allineato a sinistra; null se non c'è testo. */
-        fun band(text: String, imageWidth: Int, imageHeight: Int): Strip? = create(text, "", "", imageWidth, imageHeight, full = true)
+        fun band(text: CharSequence, imageWidth: Int, imageHeight: Int): Strip? = create(text, "", "", imageWidth, imageHeight, full = true)
 
         const val SIDE = 0.20f // larghezza di ciascun angolo; il centro ha il resto
         private val BG = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL }
 
-        fun create(left: String, center: String, right: String, imageWidth: Int, imageHeight: Int, full: Boolean = false): Strip? {
+        fun create(left: CharSequence, center: CharSequence, right: CharSequence, imageWidth: Int, imageHeight: Int, full: Boolean = false): Strip? {
             if (imageWidth <= 0 || (left.isBlank() && center.isBlank() && right.isBlank())) return null
             val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
@@ -174,23 +176,37 @@ class Overlay private constructor(private val top: Strip?, private val bottom: S
     }
 
     companion object {
-        private fun lines(band: FieldPos, fields: List<NoteField>, values: Map<String, String>): List<String> =
+        /** Giallo tuorlo dei campi in risalto. */
+        private const val YOLK = 0xFFFFB81C.toInt()
+
+        private fun lines(band: FieldPos, fields: List<NoteField>, values: Map<String, String>): List<CharSequence> =
             // i campi uniti in una catena si stampano solo dentro la catena; quelli fuori dal layout mai
             fields.filter { it.pos.band == band && it.placed && it.id !in grouped(fields) }
                 .sortedWith(compareBy({ it.pos.ordinal }, { it.slot }))
                 .mapNotNull { f ->
-                    values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                        if (f.showLabel && f.label.isNotBlank()) "${f.label.trim()}: $it" else it
+                    values[f.id]?.trim()?.takeIf { it.isNotEmpty() }?.let { v ->
+                        val text = if (f.showLabel && f.label.isNotBlank()) "${f.label.trim()}: $v" else v
+                        if (!f.highlight) text
+                        else android.text.SpannableString(text).apply {
+                            // in risalto: più grande, grassetto, giallo tuorlo
+                            val all = android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            setSpan(android.text.style.RelativeSizeSpan(1.4f), 0, length, all)
+                            setSpan(android.text.style.StyleSpan(Typeface.BOLD), 0, length, all)
+                            setSpan(android.text.style.ForegroundColorSpan(YOLK), 0, length, all)
+                        }
                     }
                 }
+
+        private fun List<CharSequence>.joinSpans(sep: String): CharSequence =
+            android.text.SpannableStringBuilder().also { b -> forEachIndexed { i, t -> if (i > 0) b.append(sep); b.append(t) } }
 
         fun create(
             note: String, fields: List<NoteField>, values: Map<String, String>,
             imageWidth: Int, imageHeight: Int,
         ): Overlay {
-            val top = lines(FieldPos.TOP, fields, values).joinToString(SEP)
-            val bottom = listOf(lines(FieldPos.BOTTOM, fields, values).joinToString(SEP), note.trim())
-                .filter { it.isNotEmpty() }.joinToString("\n")
+            val top = lines(FieldPos.TOP, fields, values).joinSpans(SEP)
+            val bottom = listOf(lines(FieldPos.BOTTOM, fields, values).joinSpans(SEP), note.trim())
+                .filter { it.isNotEmpty() }.joinSpans("\n")
             return Overlay(Strip.band(top, imageWidth, imageHeight), Strip.band(bottom, imageWidth, imageHeight))
         }
 

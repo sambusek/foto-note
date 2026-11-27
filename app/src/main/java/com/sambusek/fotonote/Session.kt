@@ -170,7 +170,7 @@ internal fun NoteField.toJson() = JSONObject()
     .put("id", id).put("label", label).put("pos", pos.name).put("showLabel", showLabel)
     .put("kind", kind.name).put("text", text).put("choices", choices)
     .put("parts", JSONArray(parts)).put("separator", separator)
-    .put("placed", placed).put("slot", slot)
+    .put("placed", placed).put("slot", slot).put("highlight", highlight)
 
 /**
  * Layout delle versioni precedenti, con gli angoli: sinistra, centro e destra finiscono
@@ -197,6 +197,7 @@ internal fun fieldFromJson(x: JSONObject): NoteField {
         separator = x.optString("separator", "_"),
         placed = x.optBoolean("placed", true),
         slot = x.optInt("slot", 0),
+        highlight = x.optBoolean("highlight", false),
     )
 }
 

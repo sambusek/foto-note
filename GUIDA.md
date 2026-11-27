@@ -73,7 +73,7 @@ Il testo e i campi finiscono in bianco su una fascia nera aggiunta sopra o sotto
 
 Il layout decide quali campi si compilano e dove si stampano sulle foto. Lo imposti per ogni sopralluogo da ⋮ › **Campi e layout…**; un template lo prepara una volta per tutti i sopralluoghi simili. La schermata ha due pagine.
 
-**Campi: cosa si compila.** Per ogni campo scegli tipo e nome, le voci se è un elenco, e se stampare l'etichetta prima del valore. Le frecce danno l'ordine nel pannello dell'editor.
+**Campi: cosa si compila.** Per ogni campo scegli tipo e nome, le voci se è un elenco, se stampare l'etichetta prima del valore e se metterlo **in risalto**: sulla foto esce più grande, in grassetto e giallo, utile per far saltare all'occhio un dato in una raccolta di foto. Anche una catena può essere in risalto. Le frecce danno l'ordine nel pannello dell'editor.
 
 | Tipo di campo | Cosa contiene | Esempio |
 | --- | --- | --- |
